@@ -72,7 +72,9 @@ impl pi::Executor for Fake {
         if prompt.contains("task-code") && self.fail_once.swap(false, Ordering::SeqCst) {
             return Err("可控的执行器故障".into());
         }
-        let text = if prompt.contains("代码协作规划") {
+        let text = if prompt.contains("项目 Skill") {
+            serde_json::to_string(&Proposal { summary: "基于固定运行整理工作流".into(), files: vec![SourceFile { path: "SKILL.md".into(), content: "---\nname: code-workflow\ndescription: Use for reviewed parallel code tasks\n---\n# Code workflow\nInspect inputs, delegate, verify each run; failed and incomplete runs are not validated.\n".into() }] }).unwrap()
+        } else if prompt.contains("代码协作规划") {
             serde_json::to_string(&plan()).unwrap()
         } else {
             let files = if self.conflicting
@@ -142,6 +144,198 @@ fn wait(runtime: &Runtime, predicate: impl Fn(&Workflow) -> bool) -> Workflow {
         assert!(start.elapsed() < Duration::from_secs(8), "timeout: {w:?}");
         thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[test]
+fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_versions() {
+    use crate::document::Document;
+    use std::collections::HashSet;
+    let directory = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let runtime =
+        Runtime::with_executor(directory.path().into(), Arc::new(Fake::default())).unwrap();
+    let id = create(&runtime, project.path());
+    let planned = wait(&runtime, |w| w.draft_plan.is_some());
+    runtime
+        .command(Command::SetPlan {
+            id: id.clone(),
+            plan: planned.draft_plan.unwrap(),
+        })
+        .unwrap();
+    runtime.command(Command::Start { id: id.clone() }).unwrap();
+    wait(&runtime, |w| {
+        w.runs.len() == 5 && w.runs.iter().all(|r| r.status == Status::Succeeded)
+    });
+    let mut doc = Document::blank().unwrap();
+    let text = doc.create_text_node([0.0, 0.0]).unwrap();
+    doc.graph.nodes[text].text = "实现求和".into();
+    let group = doc.create_group(&HashSet::from([text])).unwrap();
+    let mut bindings = canvas::Bindings::default();
+    let (goal, ids, anchor) = bindings
+        .capture(&doc, &HashSet::from([group, text]))
+        .unwrap();
+    assert_eq!(goal.matches("实现求和").count(), 1);
+    bindings.workflows.push(canvas::Binding {
+        workflow_id: id,
+        input_ids: ids,
+        anchor,
+        agents: vec![],
+    });
+    let snapshot = runtime.snapshot().unwrap();
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert_eq!(bindings.workflows[0].agents.len(), 5);
+    assert_eq!(doc.nodes[text].text, "实现求和");
+    let count = doc.nodes.len();
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert_eq!(doc.nodes.len(), count);
+    let planner = &bindings.workflows[0].agents[0];
+    let index = doc
+        .nodes
+        .iter()
+        .position(|n| n.id == planner.group_id)
+        .unwrap();
+    assert!(doc.nodes[index].collapsed);
+    assert!(bindings.capture(&doc, &HashSet::from([index])).is_err());
+    let refs = bindings.selected_runs(&doc, &HashSet::from([index]), &snapshot);
+    assert_eq!(refs[0].run_id, snapshot.workflows[0].runs[0].id);
+    let file = directory.path().join("agents.prg");
+    doc.save(&file).unwrap();
+    let restored = Document::open(&file).unwrap();
+    if let Some(path) = std::env::var_os("RAVOMI_CANVAS_AI_FIXTURE") {
+        doc.save(Path::new(&path)).unwrap();
+        fs::copy(
+            directory.path().join("workflows.json"),
+            Path::new(&path).with_extension("json"),
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        canvas::Bindings::read(&restored).unwrap().workflows[0]
+            .agents
+            .len(),
+        5
+    );
+    doc.delete_objects(&HashSet::from([index]), &HashSet::new())
+        .unwrap();
+    let count = doc.nodes.len();
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert_eq!(doc.nodes.len(), count);
+}
+
+#[test]
+fn skill_generation_freezes_evidence_and_saves_only_new_project_skill() {
+    let directory = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let runtime =
+        Runtime::with_executor(directory.path().into(), Arc::new(Fake::default())).unwrap();
+    let id = create(&runtime, project.path());
+    let planned = wait(&runtime, |w| w.draft_plan.is_some());
+    let sources = vec![skills::RunRef {
+        workflow_id: id,
+        run_id: planned.runs[0].id.clone(),
+    }];
+    let snapshot = runtime
+        .command(Command::CreateSkill {
+            project: project.path().display().to_string(),
+            model: "test/fake".into(),
+            name: "code-workflow".into(),
+            sources: sources.clone(),
+        })
+        .unwrap();
+    let skill_id = snapshot.workflows[1].id.clone();
+    let start = Instant::now();
+    let skill = loop {
+        let w = runtime.snapshot().unwrap().workflows[1].clone();
+        if w.runs[0].status == Status::Succeeded {
+            break w;
+        }
+        assert!(start.elapsed() < Duration::from_secs(8), "{:?}", w.runs[0]);
+        thread::sleep(Duration::from_millis(10));
+    };
+    assert!(skill.files[0].content.contains(&sources[0].run_id));
+    assert!(!skill.files[0].content.contains("original source"));
+    let content = &skill.runs[0].proposal.as_ref().unwrap().files[0].content;
+    let destination = runtime
+        .save_skill(&skill_id, &skill.runs[0].id, content)
+        .unwrap();
+    assert_eq!(
+        destination,
+        project.path().join(".agents/skills/code-workflow")
+    );
+    assert_eq!(
+        fs::read_to_string(destination.join("SKILL.md")).unwrap(),
+        *content
+    );
+    assert!(
+        destination
+            .join("references/ravomi-provenance.json")
+            .is_file()
+    );
+    assert!(
+        runtime
+            .save_skill(&skill_id, &skill.runs[0].id, content)
+            .is_err()
+    );
+    for name in ["../escape", "/global", "bad name", "", "UPPER"] {
+        assert!(skills::validate(name, content).is_err());
+    }
+    assert!(skills::validate("code-workflow", "---\nname: code-workflow\n---\nBody").is_err());
+    #[cfg(unix)]
+    {
+        fs::remove_dir_all(project.path().join(".agents")).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), project.path().join(".agents")).unwrap();
+        assert!(
+            runtime
+                .save_skill(&skill_id, &skill.runs[0].id, content)
+                .is_err()
+        );
+        assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+    }
+}
+
+#[test]
+fn skill_evidence_keeps_failed_running_states_and_rejects_missing_versions() {
+    let directory = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let runtime =
+        Runtime::with_executor(directory.path().into(), Arc::new(Fake::default())).unwrap();
+    create(&runtime, project.path());
+    let mut snapshot = runtime.snapshot().unwrap();
+    snapshot.workflows[0].runs[0].status = Status::Failed;
+    let first = snapshot.workflows[0].runs[0].clone();
+    let mut second = first.clone();
+    second.id = "in-flight".into();
+    second.status = Status::Running;
+    snapshot.workflows[0].runs.push(second);
+    let sources = vec![skills::RunRef {
+        workflow_id: snapshot.workflows[0].id.clone(),
+        run_id: first.id,
+    }];
+    let generated = skills::workflow(
+        &snapshot,
+        &project.path().display().to_string(),
+        "test/fake".into(),
+        "code-workflow".into(),
+        sources,
+    )
+    .unwrap();
+    assert!(generated.files[0].content.contains("failed"));
+    assert!(!generated.files[0].content.contains("in-flight"));
+    assert!(
+        skills::workflow(
+            &snapshot,
+            &project.path().display().to_string(),
+            "test/fake".into(),
+            "code-workflow".into(),
+            vec![skills::RunRef {
+                workflow_id: snapshot.workflows[0].id.clone(),
+                run_id: "missing".into()
+            }]
+        )
+        .is_err()
+    );
+    runtime.shutdown().unwrap();
 }
 
 #[test]
@@ -328,7 +522,9 @@ fn unknown_runs_do_not_restart_after_recovery() {
     let runtime = Runtime::with_executor(storage.path().into(), Arc::new(Fake::default())).unwrap();
     create(&runtime, project.path());
     runtime.shutdown().unwrap();
+    assert!(Runtime::with_executor(storage.path().into(), Arc::new(Fake::default())).is_err());
     let mut snapshot = runtime.snapshot().unwrap();
+    drop(runtime);
     snapshot.workflows[0].runs[0].status = Status::Running;
     fs::write(
         storage.path().join("workflows.json"),

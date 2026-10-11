@@ -260,6 +260,10 @@ fn title(doc: &Document) -> String {
 }
 
 impl Tabs {
+    pub(super) fn active_id(&self) -> u64 {
+        self.entries.get(self.active).map_or(0, |tab| tab.id)
+    }
+
     fn backup_directory(&self) -> Result<PathBuf> {
         self.backups
             .directory

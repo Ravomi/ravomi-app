@@ -1,7 +1,9 @@
 //! Code collaboration is independent of the drawing document and renderer.
 //! Every workflow owns a fixed source snapshot; a run never writes the source project.
+pub mod canvas;
 mod pi;
 mod runtime;
+pub mod skills;
 pub use runtime::Runtime;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -126,6 +128,12 @@ impl Default for Snapshot {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    CreateSkill {
+        project: String,
+        model: String,
+        name: String,
+        sources: Vec<skills::RunRef>,
+    },
     Create {
         project: String,
         paths: Vec<String>,

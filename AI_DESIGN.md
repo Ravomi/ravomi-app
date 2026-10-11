@@ -1,12 +1,14 @@
 # Ravomi AI 运行与多 Agent 协作设计
 
-版本：0.5（保留原设计编号）· 更新：2026-10-11 · 状态：完整运行领域设计草案；React/Tauri 已实现下述代码 MVP 子集。
+版本：0.6（保留原设计编号）· 更新：2026-10-12 · 状态：完整运行领域设计草案；React/Tauri 与原生 Bevy 已接入代码 MVP 子集。
 
 > 本文定义任务、Agent、运行、上下文、工件与交接的领域契约。产品范围、功能状态和发布顺序以 [PRD](PRD.md) 为准；界面以 [DESIGN](DESIGN.md) 为准；供 AI 设计和编写界面的执行规则见 [AI_UI_RULES](AI_UI_RULES.md)。保留既有 G01–G14、G21–G33、V01–V16 与验收编号，不补造缺失编号。
 
-Ravomi 是 Arcraven 的产品。当前仓库同时包含 Rust/Bevy 画布、`app/` React/Tauri 迁移原型和 Wry 内嵌 React 输入层。`src/collaboration.rs` 与其子模块实现代码 MVP，`app/src/Collaboration.tsx` 是实际入口；Bevy 尚未接入。旧上游 `app/src/core/`、`packages/`、AIEngine 等模块没有因此成为本仓库已实现能力。来源见 [MIGRATION](MIGRATION.md)，当前入口见 [README](README.md#文档与项目结构) 和 [app/README](app/README.md)。
+Ravomi 是 Arcraven 的产品。当前仓库同时包含 Rust/Bevy 画布、`app/` React/Tauri 迁移原型和 Wry 内嵌 React 输入层。`src/collaboration.rs` 与其子模块实现代码 MVP；`src/canvas_ai.rs` 为原生画布入口，`app/src/Collaboration.tsx` 保留独立原型入口。旧上游 `app/src/core/`、`packages/`、AIEngine 等模块没有因此成为本仓库已实现能力。来源见 [MIGRATION](MIGRATION.md)，当前入口见 [README](README.md#文档与项目结构) 和 [app/README](app/README.md)。
 
-**当前子集与设计差异**：Pi Agent Core / Pi AI 1.0.4 编译为应用私有引擎；Rust 承担 DAG 调度、单任务单 Agent、固定文件快照、显式父子检查任务、取消/重试与按 Run 审阅。持久化暂采用单后端互斥锁保护、一次替换整个快照的版本化 JSON，最多 30 流程/64 MiB；不实现本文完整 SQLite 事件模型、独立 Artifact ID 或审阅事件历史。每个 Run ID 标识一次工件版本。任务开始后计划不可修改，修订需新流程；外部会话续聊、工具循环、Skill 和空间 Agent 模块待实现。代码测试使用隔离目录但具有宿主权限；只导出人工通过的新目录，不写回原项目。完整契约仍作为后续目标，不能以本子集宣称全部完成。
+原生画布的绑定保存在 `.prg` 附件 `ravomi-code-agents.json`，仅关联输入节点、任务和流程编号；固定源码、完整日志仍位于用户数据目录 `ravomi/code-collaboration-canvas/workflows.json`。与 Tauri 数据目录分开，避免两个进程同时改写同一快照；当前不做两个入口之间的会话迁移。打开画布不自动重发，Space 只授权本次固定输入的新流程。Skill 总结使用 `$skill` Run、固定来源证据和同一 Pi 执行器，保存经过人工编辑的内容及证据副本，不自动加载或执行 Skill。
+
+**当前子集与设计差异**：Pi Agent Core / Pi AI 1.0.4 编译为应用私有引擎；Rust 承担 DAG 调度、单任务单 Agent、固定文件快照、显式父子检查任务、取消/重试与按 Run 审阅。持久化暂采用单后端互斥锁保护、一次替换整个快照的版本化 JSON，最多 30 流程/64 MiB；不实现本文完整 SQLite 事件模型、独立 Artifact ID 或审阅事件历史。每个 Run ID 标识一次工件版本。任务开始后计划不可修改，修订需新流程；外部会话续聊、工具循环和 Skill 自动复用待实现。画布节点目前是计划内 Agent 的空间投影。代码测试使用隔离目录但具有宿主权限；只导出人工通过的新目录，不写回原项目。完整契约仍作为后续目标，不能以本子集宣称全部完成。
 
 本文以可见、可连接、可干预的多 Agent 协作为主线。研究、写作、编码和视觉创作共用同一套运行契约；视觉图层、品牌包和多尺寸交付属于领域扩展，不再决定整体首发范围。Jaaz、Lovart 等旧参考保留在第 15 节，不覆盖用户已确定的 Arc 式素净 UI 与团子猫品牌。
 

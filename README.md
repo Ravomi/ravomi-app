@@ -33,7 +33,7 @@ Ravomi is designed around three qualities:
 - **Connected**: Make tasks, code, and assets reusable modules with clear relationships, dependencies, and context sources.
 - **Controllable**: Change assignments, revise plans, request a stop, or review results while keeping room to work on other independent branches.
 
-> **Current stage: a local canvas prototype and a code collaboration MVP in React/Tauri.** The desktop application now embeds Pi Agent Core for planning, parallel code proposals, fixed-version handoffs and review. Launch the [Tauri entry](app/README.md); the default Bevy canvas does not yet host these agents. Spatial agent modules, image workflows and Skill extraction remain planned. See the [product definition](PRD.md) for scope.
+> **Current stage: a native canvas with an embedded Pi code collaboration MVP.** Select text/group blocks and press Space to plan and execute bounded code tasks; each planned Agent gets a collapsible canvas node with run records. Select Agent nodes to summarize fixed runs into an editable, project-local Skill. Configure the project and explicit source paths in “Pi · 画布协作”. Image workflows, autonomous dynamic delegation and automatic Skill reuse remain planned. The [React/Tauri entry](app/README.md) is a separate prototype, not the full canvas. See [canvas workflow validation](validation/canvas-ai-workflows.md) for tested scope.
 
 <a id="界面预览"></a>
 

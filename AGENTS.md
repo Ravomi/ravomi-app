@@ -2,7 +2,7 @@
 
 Ravomi 是 Arcraven 的无限画布多 Agent 协作产品。核心定义：召唤并协作管理多个 Agent，将代码、素材、任务与子代理组织为可连接模块；AI 拆解 TODO、编排流程、按需交接任务和上下文；人能查看进度、介入调整，同时并行推进其他分支。核心体验为可见、可连接、可干预，并保持对项目全局的掌握。
 
-本仓库包含 `src/` Rust/Bevy 画布基线、`app/` React/Tauri 界面迁移原型，以及 Wry 内嵌 React 文字输入入口；根目录 `Cargo.toml` 是 workspace 入口。React/Tauri 已接入编译内置 Pi 的代码协作 MVP，实际范围与验证见 `validation/code-collaboration-mvp.md`；Bevy 空间 Agent、图像工作流和 Skill 提炼仍待实现。不能将设计概念、可视化连线或模拟测试写成已接入能力。`app/` 是实际本地目录；迁移前上游的 `app/src/core/` 等路径只在明确标记的历史资料中保留。
+本仓库包含 `src/` Rust/Bevy 画布基线、`app/` React/Tauri 界面迁移原型，以及 Wry 内嵌 React 文字输入入口；根目录 `Cargo.toml` 是 workspace 入口。两个入口均已接入编译内置 Pi 的代码协作 MVP；原生画布支持 Space 提交、折叠 Agent 节点和选区 Skill 提炼，验证范围见 `validation/canvas-ai-workflows.md`。图像工作流、动态自主委派和 Skill 自动复用仍待实现。不能将设计概念、可视化连线或模拟测试写成真实外部调用已通过。`app/` 是实际本地目录；迁移前上游的 `app/src/core/` 等路径只在明确标记的历史资料中保留。
 
 ## 文档与设计依据
 

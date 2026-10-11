@@ -15,6 +15,8 @@ use bevy::{
 use bevy_egui::{EguiPlugin, EguiPostUpdateSet, EguiPrimaryContextPass};
 use project_graph_bevy_canvas::document::Document;
 use project_graph_bevy_canvas::{Graph, GraphNode, Result};
+#[path = "canvas_ai.rs"]
+mod canvas_ai;
 #[path = "canvas_tools.rs"]
 mod canvas_tools;
 #[path = "creation.rs"]
@@ -348,6 +350,7 @@ pub fn run(graph: Document, args: &[String]) -> Result<()> {
         }))
         .add_plugins(EguiPlugin::default())
         .init_resource::<image_resize::Resize>()
+        .init_resource::<canvas_ai::State>()
         .insert_resource(sections::Display::new(
             arg(args, "--preview-tool").as_deref() == Some("collapsed"),
         ))
@@ -360,6 +363,7 @@ pub fn run(graph: Document, args: &[String]) -> Result<()> {
                 (
                     editor::apply_window_action,
                     tabs::apply,
+                    canvas_ai::ui,
                     image_resize::ui,
                     navigation::navigate,
                     sections::prepare,
@@ -1368,7 +1372,9 @@ fn input(
         return;
     }
     let pan = mouse.pressed(MouseButton::Middle)
-        || (keys.pressed(KeyCode::Space) && mouse.pressed(MouseButton::Left));
+        || (interaction.selected.is_empty()
+            && keys.pressed(KeyCode::Space)
+            && mouse.pressed(MouseButton::Left));
     if pan && let Some(previous) = previous_screen {
         let delta = cursor - previous;
         transform.translation += Vec2::new(-delta.x, delta.y).extend(0.0) * projection.scale;
