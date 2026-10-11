@@ -32,6 +32,8 @@ Graplu 从 Project Graph 的 Bevy 原型迁入，迁移前的贡献不能仅凭�
 
 这是一份主要来源与致谢索引，不是完整依赖或许可证清单。直接依赖见 [Cargo.toml](Cargo.toml)，锁定的依赖版本见 [Cargo.lock](Cargo.lock)。
 
+`.mio` 保存架构参考 [Wood-Q/Git-Agent-Sync](https://github.com/Wood-Q/Git-Agent-Sync/tree/131ded1f1b56f51275c23d45d51ca6bd68336633) 的内容寻址、封存记录与派生索引分离思路（2026-10-12 核验该固定提交，[MIT 许可证](https://github.com/Wood-Q/Git-Agent-Sync/blob/131ded1f1b56f51275c23d45d51ca6bd68336633/LICENSE)）；没有复制其代码或接入 Git 同步，具体取舍见 [存储验证记录](validation/storage-mio-v2.md#参考核验)。
+
 涂鸦的 `.prg` 字段、压力宽度与二次曲线规则参考 Project Graph master 的 [PenStroke](https://github.com/graphif/project-graph/blob/1fb1b5cc77d5d5a3820cbae4f5d5777339af63a0/app/src/core/stage/stageObject/entity/PenStroke.tsx) 和 [curveRenderer](https://github.com/graphif/project-graph/blob/1fb1b5cc77d5d5a3820cbae4f5d5777339af63a0/app/src/core/render/canvas2d/basicRenderer/curveRenderer.tsx)；Graplu 使用缓存的 Lyon 网格实现相同曲线路径。
 
 弧线连线的偏移量、圆弧方向、矩形裁剪和文字位置语义参考同一 master 提交的 [ArcEdge](https://github.com/graphif/project-graph/blob/1fb1b5cc77d5d5a3820cbae4f5d5777339af63a0/app/src/core/stage/stageObject/association/ArcEdge.tsx) 与 [renderArcEdge](https://github.com/graphif/project-graph/blob/1fb1b5cc77d5d5a3820cbae4f5d5777339af63a0/app/src/core/render/canvas2d/entityRenderer/edge/renderArcEdge.tsx)。

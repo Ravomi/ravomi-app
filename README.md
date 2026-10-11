@@ -210,4 +210,4 @@ The project is licensed under [GPL-3.0-only](LICENSE). Third-party components re
 
 ## Native project files
 
-New Ravomi projects use `.mio`: a versioned ZIP package containing the canvas, assets, and explicitly selected collaboration history. Existing `.prg` drawings remain supported through compatibility loading and saving. Opening a project never resumes archived runs; local execution records remain separate. See the [storage specification](STORAGE.md) for the package layout, conversion rules, and current limits.
+New Ravomi projects use `.mio`: a versioned ZIP package containing the canvas, assets, and explicitly selected collaboration history. Schema 2 stores shared evidence bodies by SHA-256 and seals a checked snapshot before atomically publishing a save. Existing `.mio` v1 and `.prg` drawings remain readable; saving as `.mio` upgrades the container. Opening a project never resumes archived runs; local execution records remain separate. See the [storage specification](STORAGE.md) for the package layout, conversion rules, and current limits.

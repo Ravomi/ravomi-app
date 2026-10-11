@@ -7,6 +7,7 @@ pub mod document;
 pub mod edit_protocol;
 pub mod project;
 pub mod project_history;
+mod project_package;
 pub mod recovery;
 pub mod session;
 pub mod storage;
@@ -30,8 +31,14 @@ impl ProjectFile {
     fn read(reader: impl Read + std::io::Seek) -> Result<Self> {
         let mut archive = zip::ZipArchive::new(reader)?;
         let contents = project::inspect(&mut archive)?;
-        let stage_bytes =
-            project::read_entry(&mut archive, contents.format.stage(), 128 * 1024 * 1024)?;
+        Self::from_inspected(&mut archive, &contents)
+    }
+
+    pub(crate) fn from_inspected<R: Read + std::io::Seek>(
+        archive: &mut zip::ZipArchive<R>,
+        contents: &project::Contents,
+    ) -> Result<Self> {
+        let stage_bytes = project::read_entry(archive, contents.format.stage(), 128 * 1024 * 1024)?;
         let stage: Value = rmp_serde::from_slice(&stage_bytes)?;
         if !stage.is_array() {
             return Err("stage.msgpack must contain an array".into());
@@ -48,6 +55,9 @@ impl ProjectFile {
                 entry.take(64 * 1024 * 1024).read_to_end(&mut bytes)?;
                 attachments.insert(name, bytes);
             }
+        }
+        if let Some(bytes) = &contents.bindings {
+            attachments.insert(project_package::BINDINGS_ATTACHMENT.into(), bytes.clone());
         }
         Ok(Self { stage, attachments })
     }

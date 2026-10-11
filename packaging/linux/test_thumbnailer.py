@@ -60,44 +60,83 @@ class ThumbnailTests(unittest.TestCase):
                 Path(directory, "project.mio"),
                 Path(directory, "preview.png"),
             )
-            with zipfile.ZipFile(source, "w") as archive:
-                archive.writestr("manifest.json", json.dumps(manifest))
-                archive.writestr("canvas/stage.msgpack", msgpack.packb(stage))
-                archive.writestr("assets/picture.png", png.getvalue())
-                archive.writestr("collaboration/history.json", b"not read for previews")
-            before = source.read_bytes()
-            thumbnailer.render(str(source), str(output), 128)
-            self.assertEqual(source.read_bytes(), before)
-            self.assertGreater(
-                sum(pixel == (255, 0, 0) for pixel in self.pixels(output.read_bytes())),
-                1000,
-            )
+            for version in (1, 2):
+                with self.subTest(schema_version=version):
+                    manifest["schemaVersion"] = version
+                    manifest["requiredFeatures"] = (
+                        [] if version == 1 else ["portable-snapshot-v1"]
+                    )
+                    history_entry = (
+                        "collaboration/history.json"
+                        if version == 1
+                        else "collaboration/records/history.msgpack"
+                    )
+                    with zipfile.ZipFile(source, "w") as archive:
+                        archive.writestr("manifest.json", json.dumps(manifest))
+                        archive.writestr("canvas/stage.msgpack", msgpack.packb(stage))
+                        archive.writestr("assets/picture.png", png.getvalue())
+                        # Collaboration validation belongs to the editor. Its
+                        # records are never decoded while rendering a preview.
+                        archive.writestr(history_entry, b"not read for previews")
+                        if version == 2:
+                            archive.writestr(
+                                "collaboration/snapshot.json", b"not read for previews"
+                            )
+                            archive.writestr(
+                                "objects/sha256/" + "a" * 64, b"not read for previews"
+                            )
+                    before = source.read_bytes()
+                    thumbnailer.render(str(source), str(output), 128)
+                    self.assertEqual(source.read_bytes(), before)
+                    self.assertGreater(
+                        sum(
+                            pixel == (255, 0, 0)
+                            for pixel in self.pixels(output.read_bytes())
+                        ),
+                        1000,
+                    )
 
-    def test_mio_preview_rejects_future_manifest_without_using_legacy_fallback(self):
+    def test_mio_preview_rejects_unsupported_manifest_without_legacy_fallback(self):
+        manifest = {
+            "format": "ravomi-project",
+            "schemaVersion": 2,
+            "canvasSchemaVersion": 1,
+            "projectId": "90d4ef64-087e-476b-8a2a-dfd03f1b9e59",
+            "requiredFeatures": ["portable-snapshot-v1"],
+        }
+        invalid = [
+            {"schemaVersion": 3},
+            {"schemaVersion": 0},
+            {"schemaVersion": True},
+            {"canvasSchemaVersion": 2},
+            {"canvasSchemaVersion": True},
+            {"requiredFeatures": ["portable-snapshot-v1", "future-feature"]},
+            {"requiredFeatures": []},
+            {"requiredFeatures": "portable-snapshot-v1"},
+            {"requiredFeatures": None},
+            {"schemaVersion": 1, "requiredFeatures": ["future-feature"]},
+        ]
         with tempfile.TemporaryDirectory() as directory:
             source, output = (
                 Path(directory, "project.mio"),
                 Path(directory, "preview.png"),
             )
-            with zipfile.ZipFile(source, "w") as archive:
-                archive.writestr(
-                    "manifest.json",
-                    json.dumps(
-                        {
-                            "format": "ravomi-project",
-                            "schemaVersion": 2,
-                            "canvasSchemaVersion": 1,
-                            "projectId": "90d4ef64-087e-476b-8a2a-dfd03f1b9e59",
-                        }
-                    ),
-                )
-                archive.writestr(
-                    "stage.json", json.dumps({"objects": [self.node("old", "stale")]})
-                )
-            output.write_bytes(b"previous preview")
-            with self.assertRaisesRegex(ValueError, "Unsupported Ravomi project"):
-                thumbnailer.render(str(source), str(output), 128)
-            self.assertEqual(output.read_bytes(), b"previous preview")
+            for changes in invalid:
+                with self.subTest(changes=changes):
+                    with zipfile.ZipFile(source, "w") as archive:
+                        archive.writestr(
+                            "manifest.json", json.dumps({**manifest, **changes})
+                        )
+                        archive.writestr(
+                            "stage.json",
+                            json.dumps({"objects": [self.node("old", "stale")]}),
+                        )
+                    output.write_bytes(b"previous preview")
+                    with self.assertRaisesRegex(
+                        ValueError, "Unsupported Ravomi project"
+                    ):
+                        thumbnailer.render(str(source), str(output), 128)
+                    self.assertEqual(output.read_bytes(), b"previous preview")
 
     def native_document(self, directory, graph):
         source = Path(directory, "native.prg")

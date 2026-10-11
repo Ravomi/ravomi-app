@@ -690,16 +690,24 @@ def render(input_path, output, requested_size, requested_height=None):
                     not isinstance(manifest, dict)
                     or manifest.get("format") != "ravomi-project"
                     or type(manifest.get("schemaVersion")) is not int
-                    or manifest.get("schemaVersion") != 1
+                    or manifest.get("schemaVersion") not in (1, 2)
                     or type(manifest.get("canvasSchemaVersion")) is not int
                     or manifest.get("canvasSchemaVersion") != 1
-                    or manifest.get("requiredFeatures", []) != []
+                    or manifest.get("requiredFeatures", [])
+                    != (
+                        []
+                        if manifest["schemaVersion"] == 1
+                        else ["portable-snapshot-v1"]
+                    )
                     or not isinstance(manifest.get("projectId"), str)
                 ):
                     raise ValueError("Unsupported Ravomi project format or version")
                 uuid.UUID(manifest.get("projectId", ""))
                 if len(names) != len(set(names)):
                     raise ValueError("Duplicate Ravomi project entries")
+                # Both container versions use canvas schema 1. Previews read
+                # only the canvas and assets, not collaboration records or the
+                # v2 package integrity manifest; full validation is the editor's job.
                 stage_entry = "canvas/stage.msgpack"
                 assets_prefix = "assets/"
                 if stage_entry not in names:

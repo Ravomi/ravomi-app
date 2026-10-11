@@ -17,7 +17,8 @@ pub const MANIFEST_ENTRY: &str = "manifest.json";
 pub use crate::project_history::HISTORY_ENTRY;
 pub const LEGACY_PREFIX: &str = "extensions/legacy/";
 const FORMAT_ID: &str = "ravomi-project";
-const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
+pub const SNAPSHOT_FEATURE: &str = "portable-snapshot-v1";
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_PROJECT_BYTES: u64 = 512 * 1024 * 1024;
@@ -43,7 +44,7 @@ impl Default for Manifest {
             schema_version: SCHEMA_VERSION,
             project_id: uuid::Uuid::new_v4().to_string(),
             canvas_schema_version: 1,
-            required_features: vec![],
+            required_features: vec![SNAPSHOT_FEATURE.into()],
             extensions: BTreeMap::new(),
         }
     }
@@ -52,7 +53,7 @@ impl Default for Manifest {
 impl Manifest {
     pub fn validate(&self) -> Result<()> {
         if self.format != FORMAT_ID
-            || self.schema_version != SCHEMA_VERSION
+            || !matches!(self.schema_version, 1 | SCHEMA_VERSION)
             || self.canvas_schema_version != 1
         {
             return Err("不支持的 Ravomi 项目格式或版本，请使用兼容的应用打开".into());
@@ -60,7 +61,12 @@ impl Manifest {
         if uuid::Uuid::parse_str(&self.project_id).is_err() {
             return Err("项目身份无效".into());
         }
-        if !self.required_features.is_empty() {
+        let expected = if self.schema_version == SCHEMA_VERSION {
+            vec![SNAPSHOT_FEATURE.to_owned()]
+        } else {
+            vec![]
+        };
+        if self.required_features != expected {
             return Err(format!(
                 "项目需要尚未支持的能力：{}",
                 self.required_features.join("、")
@@ -68,6 +74,13 @@ impl Manifest {
             .into());
         }
         Ok(())
+    }
+
+    pub(crate) fn for_save(&self) -> Self {
+        let mut manifest = self.clone();
+        manifest.schema_version = SCHEMA_VERSION;
+        manifest.required_features = vec![SNAPSHOT_FEATURE.into()];
+        manifest
     }
 }
 
@@ -119,6 +132,7 @@ pub(crate) struct Contents {
     pub format: Format,
     pub manifest: Manifest,
     pub history: History,
+    pub bindings: Option<Vec<u8>>,
 }
 
 pub(crate) fn inspect<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Result<Contents> {
@@ -141,6 +155,7 @@ pub(crate) fn inspect<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Resul
             format: Format::Prg,
             manifest: Manifest::default(),
             history: History::default(),
+            bindings: None,
         });
     }
     if !has_manifest {
@@ -150,13 +165,20 @@ pub(crate) fn inspect<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Resul
     let manifest: Manifest =
         serde_json::from_slice(&read_entry(archive, MANIFEST_ENTRY, MAX_MANIFEST_BYTES)?)?;
     manifest.validate()?;
-    let history: History =
-        serde_json::from_slice(&read_entry(archive, HISTORY_ENTRY, MAX_HISTORY_BYTES)?)?;
+    let (history, bindings) = if manifest.schema_version == SCHEMA_VERSION {
+        crate::project_package::read(archive, &manifest)?
+    } else {
+        (
+            serde_json::from_slice(&read_entry(archive, HISTORY_ENTRY, MAX_HISTORY_BYTES)?)?,
+            None,
+        )
+    };
     history.validate()?;
     Ok(Contents {
         format: Format::Mio,
         manifest,
         history,
+        bindings,
     })
 }
 

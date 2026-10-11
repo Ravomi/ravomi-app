@@ -5,19 +5,21 @@
 //! Free-form evidence is preserved as supplied; this is not a content scrubber.
 use crate::{Result, collaboration};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const HISTORY_ENTRY: &str = "collaboration/history.json";
 pub const HISTORY_SCHEMA_VERSION: u32 = 1;
+const MAX_GRAPH_NODES: usize = 65_536;
+const MAX_GRAPH_EDGES: usize = 262_144;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct History {
+pub struct History<T = String> {
     pub schema_version: u32,
-    pub workflows: Vec<ArchivedWorkflow>,
+    pub workflows: Vec<ArchivedWorkflow<T>>,
 }
 
-impl Default for History {
+impl<T> Default for History<T> {
     fn default() -> Self {
         Self {
             schema_version: HISTORY_SCHEMA_VERSION,
@@ -28,21 +30,21 @@ impl Default for History {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ArchivedWorkflow {
+pub struct ArchivedWorkflow<T = String> {
     pub id: String,
-    pub goal: String,
+    pub goal: T,
     pub model: String,
-    pub files: Vec<ArchivedFile>,
+    pub files: Vec<ArchivedFile<T>>,
     pub plan: Option<ArchivedPlan>,
     pub draft_plan: Option<ArchivedPlan>,
-    pub runs: Vec<ArchivedRun>,
+    pub runs: Vec<ArchivedRun<T>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ArchivedFile {
+pub struct ArchivedFile<T = String> {
     pub path: String,
-    pub content: String,
+    pub content: T,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -65,9 +67,9 @@ pub struct ArchivedTask {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ArchivedProposal {
-    pub summary: String,
-    pub files: Vec<ArchivedFile>,
+pub struct ArchivedProposal<T = String> {
+    pub summary: T,
+    pub files: Vec<ArchivedFile<T>>,
 }
 
 /// The status observed at capture time, never a request to resume execution.
@@ -86,18 +88,18 @@ pub enum ArchivedStatus {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ArchivedRun {
+pub struct ArchivedRun<T = String> {
     pub id: String,
     pub task_id: String,
     pub status: ArchivedStatus,
     pub created_at: u64,
     pub finished_at: Option<u64>,
     pub sources: Vec<String>,
-    pub prompt: String,
-    pub input_files: Vec<ArchivedFile>,
-    pub output: String,
-    pub proposal: Option<ArchivedProposal>,
-    pub error: Option<String>,
+    pub prompt: T,
+    pub input_files: Vec<ArchivedFile<T>>,
+    pub output: T,
+    pub proposal: Option<ArchivedProposal<T>>,
+    pub error: Option<T>,
     /// Historical evidence only; this does not authorize a local action.
     pub review: Option<String>,
     pub usage: Option<serde_json::Value>,
@@ -135,12 +137,77 @@ impl History {
         history.validate()?;
         Ok(history)
     }
+}
+
+impl<T> History<T> {
+    /// Transform body text without changing structural identities or metadata.
+    /// The same DTO can therefore encode text or references to stored content.
+    pub fn try_map_text<U>(self, mut map: impl FnMut(T) -> Result<U>) -> Result<History<U>> {
+        let workflows = self
+            .workflows
+            .into_iter()
+            .map(|workflow| {
+                let goal = map(workflow.goal)?;
+                let files = map_files(workflow.files, &mut map)?;
+                let runs = workflow
+                    .runs
+                    .into_iter()
+                    .map(|run| {
+                        let prompt = map(run.prompt)?;
+                        let input_files = map_files(run.input_files, &mut map)?;
+                        let output = map(run.output)?;
+                        let proposal = run
+                            .proposal
+                            .map(|proposal| {
+                                Ok::<_, Box<dyn std::error::Error>>(ArchivedProposal {
+                                    summary: map(proposal.summary)?,
+                                    files: map_files(proposal.files, &mut map)?,
+                                })
+                            })
+                            .transpose()?;
+                        let error = run.error.map(&mut map).transpose()?;
+                        Ok(ArchivedRun {
+                            id: run.id,
+                            task_id: run.task_id,
+                            status: run.status,
+                            created_at: run.created_at,
+                            finished_at: run.finished_at,
+                            sources: run.sources,
+                            prompt,
+                            input_files,
+                            output,
+                            proposal,
+                            error,
+                            review: run.review,
+                            usage: run.usage,
+                            retry_of: run.retry_of,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ArchivedWorkflow {
+                    id: workflow.id,
+                    goal,
+                    model: workflow.model,
+                    files,
+                    plan: workflow.plan,
+                    draft_plan: workflow.draft_plan,
+                    runs,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(History {
+            schema_version: self.schema_version,
+            workflows,
+        })
+    }
 
     /// Validate the archive schema and all structural references before use.
     pub fn validate(&self) -> Result<()> {
         if self.schema_version != HISTORY_SCHEMA_VERSION {
             return Err(format!("不支持的协作归档版本：{}", self.schema_version).into());
         }
+        let mut budget = GraphBudget::default();
+        budget.nodes(self.workflows.len())?;
         let mut workflow_ids = BTreeSet::new();
         let mut global_run_ids = BTreeSet::new();
         for workflow in &self.workflows {
@@ -148,8 +215,14 @@ impl History {
                 return Err("协作归档的流程 ID 为空或重复".into());
             }
             for plan in [&workflow.plan, &workflow.draft_plan].into_iter().flatten() {
-                validate_plan(plan)?;
+                validate_plan(plan, &mut budget)?;
             }
+            budget.nodes(workflow.runs.len())?;
+            budget.edges(workflow.runs.iter().fold(0usize, |total, run| {
+                total
+                    .saturating_add(run.sources.len())
+                    .saturating_add(usize::from(run.retry_of.is_some()))
+            }))?;
             let task_ids: BTreeSet<_> = [&workflow.plan, &workflow.draft_plan]
                 .into_iter()
                 .flatten()
@@ -181,12 +254,43 @@ impl History {
                     return Err(format!("运行的重试来源无效：{previous}").into());
                 }
             }
+            validate_acyclic(
+                workflow.runs.iter().map(|run| run.id.as_str()),
+                workflow.runs.iter().flat_map(|run| {
+                    run.sources
+                        .iter()
+                        .chain(run.retry_of.iter())
+                        .map(move |source| (run.id.as_str(), source.as_str()))
+                }),
+                "运行来源与重试",
+            )?;
         }
         Ok(())
     }
 }
 
-fn validate_plan(plan: &ArchivedPlan) -> Result<()> {
+fn map_files<T, U>(
+    files: Vec<ArchivedFile<T>>,
+    map: &mut impl FnMut(T) -> Result<U>,
+) -> Result<Vec<ArchivedFile<U>>> {
+    files
+        .into_iter()
+        .map(|file| {
+            Ok(ArchivedFile {
+                path: file.path,
+                content: map(file.content)?,
+            })
+        })
+        .collect()
+}
+
+fn validate_plan(plan: &ArchivedPlan, budget: &mut GraphBudget) -> Result<()> {
+    budget.nodes(plan.tasks.len())?;
+    budget.edges(plan.tasks.iter().fold(0usize, |total, task| {
+        total
+            .saturating_add(task.dependencies.len())
+            .saturating_add(usize::from(task.parent_agent.is_some()))
+    }))?;
     let mut ids = BTreeSet::new();
     for task in &plan.tasks {
         if task.id.is_empty() || task.id.starts_with('$') || !ids.insert(task.id.as_str()) {
@@ -208,6 +312,84 @@ fn validate_plan(plan: &ArchivedPlan) -> Result<()> {
         {
             return Err(format!("任务的父代理引用无效：{parent}").into());
         }
+    }
+    validate_acyclic(
+        plan.tasks.iter().map(|task| task.id.as_str()),
+        plan.tasks.iter().flat_map(|task| {
+            task.dependencies
+                .iter()
+                .chain(task.parent_agent.iter())
+                .map(move |parent| (task.id.as_str(), parent.as_str()))
+        }),
+        "任务依赖与父代理",
+    )
+}
+
+struct GraphBudget {
+    nodes_left: usize,
+    edges_left: usize,
+}
+
+impl Default for GraphBudget {
+    fn default() -> Self {
+        Self {
+            nodes_left: MAX_GRAPH_NODES,
+            edges_left: MAX_GRAPH_EDGES,
+        }
+    }
+}
+
+impl GraphBudget {
+    fn nodes(&mut self, count: usize) -> Result<()> {
+        self.nodes_left = self
+            .nodes_left
+            .checked_sub(count)
+            .ok_or("协作归档的结构对象过多")?;
+        Ok(())
+    }
+
+    fn edges(&mut self, count: usize) -> Result<()> {
+        self.edges_left = self
+            .edges_left
+            .checked_sub(count)
+            .ok_or("协作归档的关系过多")?;
+        Ok(())
+    }
+}
+
+/// Kahn's algorithm uses an explicit work list, including for very deep chains.
+/// Both reference kinds share a graph so mixed-kind cycles are rejected too.
+fn validate_acyclic<'a>(
+    ids: impl Iterator<Item = &'a str>,
+    edges: impl Iterator<Item = (&'a str, &'a str)>,
+    label: &str,
+) -> Result<()> {
+    let indices: BTreeMap<_, _> = ids.enumerate().map(|(index, id)| (id, index)).collect();
+    let mut indegrees = vec![0usize; indices.len()];
+    let mut followers = vec![Vec::new(); indices.len()];
+    for (id, dependency) in edges {
+        let &node = indices.get(id).ok_or("协作归档引用的对象不存在")?;
+        let &parent = indices.get(dependency).ok_or("协作归档引用的对象不存在")?;
+        indegrees[node] += 1;
+        followers[parent].push(node);
+    }
+    let mut ready: Vec<_> = indegrees
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &degree)| (degree == 0).then_some(index))
+        .collect();
+    let mut visited = 0;
+    while let Some(parent) = ready.pop() {
+        visited += 1;
+        for &node in &followers[parent] {
+            indegrees[node] -= 1;
+            if indegrees[node] == 0 {
+                ready.push(node);
+            }
+        }
+    }
+    if visited != indices.len() {
+        return Err(format!("协作归档的{label}存在循环").into());
     }
     Ok(())
 }
@@ -445,5 +627,212 @@ mod tests {
             .dependencies
             .push("missing".into());
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn body_mapping_round_trips_all_text_and_preserves_metadata() {
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        struct TextRef {
+            object: usize,
+        }
+
+        let mut source = workflow("mapping");
+        source.goal = "共享正文".into();
+        source.files[0].content = "共享正文".into();
+        source.runs[0].error = Some("错误正文".into());
+        source.runs[0].review = Some("approved".into());
+        source.runs[0].usage = Some(serde_json::json!({"input": 42}));
+        source.runs[0].proposal = Some(collaboration::Proposal {
+            summary: "总结正文".into(),
+            files: vec![SourceFile {
+                path: "generated.rs".into(),
+                content: "成果正文".into(),
+            }],
+        });
+        let mut history = History::capture(
+            &Snapshot {
+                workflows: vec![source],
+                ..Snapshot::default()
+            },
+            &["mapping".into()],
+        )
+        .unwrap();
+        history.workflows[0].plan = Some(ArchivedPlan {
+            tasks: vec![archived_task("task")],
+        });
+        history.workflows[0].draft_plan = history.workflows[0].plan.clone();
+        let mut objects: Vec<String> = Vec::new();
+        let mapped = history
+            .clone()
+            .try_map_text(|text| {
+                let object = if let Some(index) = objects.iter().position(|saved| saved == &text) {
+                    index
+                } else {
+                    objects.push(text);
+                    objects.len() - 1
+                };
+                Ok(TextRef { object })
+            })
+            .unwrap();
+        mapped.validate().unwrap();
+        assert_eq!(
+            mapped.workflows[0].goal,
+            mapped.workflows[0].files[0].content
+        );
+        let json = serde_json::to_value(&mapped).unwrap();
+        let run = &json["workflows"][0]["runs"][0];
+        for body in [
+            &json["workflows"][0]["goal"],
+            &json["workflows"][0]["files"][0]["content"],
+            &run["prompt"],
+            &run["inputFiles"][0]["content"],
+            &run["output"],
+            &run["error"],
+            &run["proposal"]["summary"],
+            &run["proposal"]["files"][0]["content"],
+        ] {
+            assert!(
+                body.get("object")
+                    .and_then(serde_json::Value::as_u64)
+                    .is_some()
+            );
+        }
+        assert_eq!(run["review"], "approved");
+        assert_eq!(run["usage"], serde_json::json!({"input": 42}));
+        assert_eq!(
+            json["workflows"][0]["plan"]["tasks"][0]["instruction"],
+            "instruction"
+        );
+        let decoded: History<TextRef> = serde_json::from_value(json).unwrap();
+        let restored = decoded
+            .try_map_text(|reference| {
+                objects
+                    .get(reference.object)
+                    .cloned()
+                    .ok_or_else(|| "正文对象不存在".into())
+            })
+            .unwrap();
+        assert_eq!(restored, history);
+        assert!(
+            history
+                .try_map_text::<usize>(|_| Err("正文存储失败".into()))
+                .is_err()
+        );
+    }
+
+    fn archived_task(id: &str) -> ArchivedTask {
+        ArchivedTask {
+            id: id.into(),
+            title: "title".into(),
+            role: "role".into(),
+            instruction: "instruction".into(),
+            acceptance: "acceptance".into(),
+            dependencies: vec![],
+            parent_agent: None,
+        }
+    }
+
+    fn history_with_runs(count: usize) -> History {
+        let mut history = History::capture(
+            &Snapshot {
+                workflows: vec![workflow("graph")],
+                ..Snapshot::default()
+            },
+            &["graph".into()],
+        )
+        .unwrap();
+        let mut template = history.workflows[0].runs[0].clone();
+        template.input_files.clear();
+        history.workflows[0].runs = (0..count)
+            .map(|index| {
+                let mut run = template.clone();
+                run.id = index.to_string();
+                run
+            })
+            .collect();
+        history
+    }
+
+    #[test]
+    fn validation_rejects_multi_run_source_retry_and_mixed_cycles() {
+        for kind in ["sources", "retry", "mixed"] {
+            let mut history = history_with_runs(3);
+            for (index, run) in history.workflows[0].runs.iter_mut().enumerate() {
+                let reference = ((index + 1) % 3).to_string();
+                if kind == "retry" || (kind == "mixed" && index == 1) {
+                    run.retry_of = Some(reference);
+                } else {
+                    run.sources.push(reference);
+                }
+            }
+            let error = history.validate().unwrap_err().to_string();
+            assert!(error.contains("循环"), "{kind}: {error}");
+        }
+    }
+
+    #[test]
+    fn validation_rejects_multi_task_dependency_parent_and_mixed_cycles() {
+        for kind in ["dependencies", "parent", "mixed"] {
+            let mut history = history_with_runs(1);
+            let tasks = (0..3)
+                .map(|index| {
+                    let mut task = archived_task(&index.to_string());
+                    let reference = ((index + 1) % 3).to_string();
+                    if kind == "parent" || (kind == "mixed" && index == 1) {
+                        task.parent_agent = Some(reference);
+                    } else {
+                        task.dependencies.push(reference);
+                    }
+                    task
+                })
+                .collect();
+            history.workflows[0].draft_plan = Some(ArchivedPlan { tasks });
+            let error = history.validate().unwrap_err().to_string();
+            assert!(error.contains("循环"), "{kind}: {error}");
+        }
+    }
+
+    #[test]
+    fn validation_handles_deep_chains_iteratively_and_limits_graph_work() {
+        let mut history = history_with_runs(20_000);
+        for (index, run) in history.workflows[0].runs.iter_mut().enumerate().skip(1) {
+            run.sources.push((index - 1).to_string());
+        }
+        history.validate().unwrap();
+        history.workflows[0].runs[0].sources.push("19999".into());
+        assert!(history.validate().unwrap_err().to_string().contains("循环"));
+
+        let mut oversized = history_with_runs(1);
+        oversized.workflows[0].runs[0].sources = vec!["missing".into(); MAX_GRAPH_EDGES + 1];
+        assert!(
+            oversized
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("关系过多")
+        );
+
+        let oversized: History = History {
+            schema_version: HISTORY_SCHEMA_VERSION,
+            workflows: vec![
+                ArchivedWorkflow {
+                    id: "unused".into(),
+                    goal: String::new(),
+                    model: String::new(),
+                    files: vec![],
+                    plan: None,
+                    draft_plan: None,
+                    runs: vec![],
+                };
+                MAX_GRAPH_NODES + 1
+            ],
+        };
+        assert!(
+            oversized
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("对象过多")
+        );
     }
 }
