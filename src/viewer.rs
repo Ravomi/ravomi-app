@@ -320,6 +320,10 @@ pub fn run(graph: Document, args: &[String]) -> Result<()> {
                     bevy::window::CompositeAlphaMode::PreMultiplied
                 },
                 title: "Ravomi".into(),
+                // Keep AppKit's traffic lights, but paint the titlebar with our canvas.
+                fullsize_content_view: cfg!(target_os = "macos"),
+                titlebar_transparent: cfg!(target_os = "macos"),
+                titlebar_show_title: !cfg!(target_os = "macos"),
                 name: Some("io.github.graphif.Graplu".into()),
                 resolution: if benchmark_mode && !args.iter().any(|arg| arg == "--native-scale") {
                     WindowResolution::new(1280, 800).with_scale_factor_override(1.0)

@@ -509,7 +509,7 @@ impl Tabs {
                 egui::Align2::CENTER_TOP,
                 [
                     (left + right) * 0.5 - ctx.content_rect().center().x,
-                    theme::DOCK_TOP,
+                    theme::dock_top(ctx),
                 ],
             )
             .show(ctx, |ui| {
@@ -1386,7 +1386,7 @@ mod tests {
                     output.textures_delta.clear();
                 }
                 let rect = tabs.track_rect.unwrap();
-                assert!((rect.top() - theme::DOCK_TOP).abs() < 1.0, "{rect:?}");
+                assert!((rect.top() - theme::dock_top(&ctx)).abs() < 1.0, "{rect:?}");
                 assert!(
                     rect.left() >= left && rect.right() <= left + gap,
                     "{rect:?}"

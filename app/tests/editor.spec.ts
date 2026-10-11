@@ -57,6 +57,28 @@ test('browser preview explicitly disables document operations', async ({ page })
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('macOS traffic lights keep a fixed safe area across widths and UI scales', async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, 'platform', { value: 'MacIntel' }));
+  await desktop(page);
+  for (const width of [1200, 360]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const scale of ['100', '150', '200']) {
+      await page.getByLabel('界面缩放').selectOption(scale);
+      const strip = await page.locator('.macos-titlebar').boundingBox();
+      const drag = await page.locator('[data-tauri-drag-region]').boundingBox();
+      expect(strip?.height).toBeCloseTo(36, 0);
+      expect(drag?.x).toBeCloseTo(88, 0);
+      expect(drag!.width).toBeGreaterThan(0);
+      const header = await page.locator('.topbar').boundingBox();
+      expect(header!.y).toBeGreaterThanOrEqual(strip!.height);
+      expect(await page.locator('[data-tauri-drag-region] button, [data-tauri-drag-region] select').count()).toBe(0);
+    }
+    await page.getByRole('button', { name: '切换深色主题' }).click();
+    await expect(page.locator('.app')).toHaveAttribute('data-theme', 'dark');
+    await page.getByRole('button', { name: '切换浅色主题' }).click();
+  }
+});
+
 test('saving applies a draft, shows IO errors, and preserves the edited text', async ({ page }) => {
   await desktop(page);
   await page.getByRole('button', { name: /原始想法/ }).click();

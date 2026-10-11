@@ -132,7 +132,9 @@ export function App() {
   }
 
   const disabled = busy || !ready;
-  return <div className="app" data-theme={light ? 'light' : 'dark'} style={{ zoom: Number(scale) / 100, minHeight: `${10000 / Number(scale)}dvh` }}>
+  const macWindow = native && /Mac/.test(navigator.platform);
+  return <div className="app" data-macos={macWindow || undefined} data-theme={light ? 'light' : 'dark'} style={{ zoom: Number(scale) / 100, minHeight: `${10000 / Number(scale)}dvh` }}>
+    {macWindow && <div className="macos-titlebar" style={{ height: 3600 / Number(scale), paddingLeft: 8800 / Number(scale) }} aria-hidden="true"><div data-tauri-drag-region /></div>}
     <aside className="navigation" aria-label="主导航">
       <div className="navigation-brand"><img src={appIcon} alt="" /><div>Ravomi<small>人和 Agent，共绘工作</small></div></div>
       <p className="nav-label">工作空间</p>

@@ -112,6 +112,18 @@ pub(super) fn egui_color(c: Color) -> egui::Color32 {
 pub const DOCK_TOP: f32 = 16.0;
 pub const DOCK_ITEM: f32 = 40.0;
 
+pub fn window_chrome_height(ctx: &egui::Context) -> f32 {
+    if cfg!(target_os = "macos") {
+        36.0 / ctx.zoom_factor()
+    } else {
+        0.0
+    }
+}
+
+pub fn dock_top(ctx: &egui::Context) -> f32 {
+    DOCK_TOP + window_chrome_height(ctx)
+}
+
 pub struct DockPalette {
     pub surface: egui::Color32,
     pub border: egui::Color32,

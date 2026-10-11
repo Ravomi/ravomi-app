@@ -358,6 +358,7 @@ pub struct Editor {
 }
 
 enum WindowAction {
+    Drag,
     Minimize,
     ToggleMaximize,
     Fullscreen,
@@ -406,6 +407,18 @@ pub fn apply_window_action(world: &mut World) {
         return;
     };
     match action {
+        WindowAction::Drag => {
+            let result = bevy::winit::WINIT_WINDOWS.with_borrow(|windows| {
+                windows
+                    .get_window(entity)
+                    .map(|window| window.drag_window())
+            });
+            if let Some(Err(error)) = result {
+                world
+                    .resource_mut::<Editor>()
+                    .report_error(format!("无法拖动窗口：{error}"));
+            }
+        }
         WindowAction::Fullscreen => {
             window.mode = if window.mode == bevy::window::WindowMode::Windowed {
                 bevy::window::WindowMode::BorderlessFullscreen(
@@ -879,6 +892,32 @@ pub fn ui(
         ctx.options_mut(|o| o.max_passes = std::num::NonZeroUsize::new(1).unwrap());
         editor.initialized = true;
     }
+    if cfg!(target_os = "macos") {
+        // AppKit controls do not scale with egui. Reserve a fixed logical 36 px
+        // strip so traffic lights never overlap tabs, including at 200% UI zoom.
+        egui::Area::new("macos-window-chrome".into())
+            .fixed_pos(egui::Pos2::ZERO)
+            .movable(false)
+            .show(ctx, |ui| {
+                let (mut rect, _) = ui.allocate_exact_size(
+                    egui::vec2(ctx.content_rect().width(), theme::window_chrome_height(ctx)),
+                    egui::Sense::hover(),
+                );
+                ui.painter().rect_filled(
+                    rect,
+                    0.0,
+                    theme::egui_color(theme::window_background(editor.light)),
+                );
+                rect.min.x += 88.0 / ctx.zoom_factor();
+                let response =
+                    ui.interact(rect, ui.id().with("drag"), egui::Sense::click_and_drag());
+                if response.double_clicked() {
+                    editor.window_action = Some(WindowAction::ToggleMaximize);
+                } else if response.drag_started() {
+                    editor.window_action = Some(WindowAction::Drag);
+                }
+            });
+    }
     if let Some(dialog) = &editor.dialog {
         let result = dialog.lock().expect("dialog receiver").try_recv();
         match result {
@@ -1116,7 +1155,7 @@ pub fn ui(
         }
     }
     let controls = egui::Area::new("window-controls".into())
-        .anchor(egui::Align2::RIGHT_TOP, [-16.0, theme::DOCK_TOP])
+        .anchor(egui::Align2::RIGHT_TOP, [-16.0, theme::dock_top(ctx)])
         .show(ctx, |ui| {
             theme::chrome_frame(editor.light).show(ui, |ui| {
                 theme::chrome_style(ui, editor.light);
@@ -1171,7 +1210,8 @@ pub fn ui(
                     {
                         editor.window_action = Some(WindowAction::Pin);
                     }
-                    if !compact
+                    if !cfg!(target_os = "macos")
+                        && !compact
                         && ui
                             .add(dock_button(&editor, ui, 5))
                             .on_hover_text("最小化")
@@ -1179,7 +1219,8 @@ pub fn ui(
                     {
                         editor.window_action = Some(WindowAction::Minimize);
                     }
-                    if !compact
+                    if !cfg!(target_os = "macos")
+                        && !compact
                         && ui
                             .add(dock_button(&editor, ui, 6))
                             .on_hover_text("最大化 / 还原")
@@ -1187,10 +1228,11 @@ pub fn ui(
                     {
                         editor.window_action = Some(WindowAction::ToggleMaximize);
                     }
-                    if ui
-                        .add(dock_button(&editor, ui, 7))
-                        .on_hover_text("关闭窗口")
-                        .clicked()
+                    if !cfg!(target_os = "macos")
+                        && ui
+                            .add(dock_button(&editor, ui, 7))
+                            .on_hover_text("关闭窗口")
+                            .clicked()
                     {
                         if scene.0.dirty() || editor.active.is_some() || tabs.dirty() {
                             editor.closing = true;

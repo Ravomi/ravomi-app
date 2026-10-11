@@ -16,6 +16,9 @@ body { margin: 0; }
   --accent: #595e82; --primary: #16171c; --ink: #ffffff; --error: #a33f4b;
   color-scheme: light;
 }
+.app[data-macos] { grid-template-rows: auto 1fr; }
+.macos-titlebar { grid-column: 1 / -1; background: var(--chrome); user-select: none; }
+.macos-titlebar > div { height: 100%; }
 button, select, textarea, summary { font: inherit; color: inherit; }
 button, select, summary, .navigation a { min-height: 36px; border: 1px solid transparent; border-radius: 10px; background: transparent; padding: 8px 12px; cursor: pointer; white-space: nowrap; }
 button, .navigation a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }

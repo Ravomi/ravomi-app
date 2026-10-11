@@ -260,7 +260,7 @@ impl Home {
         let screen = ctx.content_rect();
         let margin = if screen.width() < 800.0 { 16.0 } else { 28.0 };
         let rect = egui::Rect::from_min_max(
-            egui::pos2(margin, 96.0),
+            egui::pos2(margin, 96.0 + theme::window_chrome_height(ctx)),
             screen.max - egui::vec2(margin, margin),
         );
         let mut action = None;
