@@ -529,6 +529,10 @@ impl Tabs {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+        if editor.home_visible() {
+            self.track_rect = None;
+            return;
+        }
         let enabled = !editor.tabs_blocked() && !editor.closing && !self.confirm_close;
         let (now, dt) = ctx.input(|i| (i.time, i.stable_dt.min(0.05)));
         let hovered = self

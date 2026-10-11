@@ -648,6 +648,9 @@ impl Editor {
     pub fn hide_home(&mut self) {
         self.home.visible = false;
     }
+    pub(super) fn home_visible(&self) -> bool {
+        self.home.visible
+    }
     pub fn open_urls(&mut self, doc: &Document, selected: &HashSet<usize>) -> Result<()> {
         if self.opening_urls.is_some() {
             return Err("正在打开网址，请稍后重试".into());
@@ -1004,7 +1007,7 @@ pub fn ui(
     {
         editor.report_error(error);
     }
-    let light = editor.light;
+    let light = editor.light && !editor.home.visible;
     let (export, error) = editor.export.show(
         ctx,
         light,
@@ -1070,6 +1073,21 @@ pub fn ui(
             home::Action::Settings => editor.menu.select(2),
             home::Action::Help => editor.help = true,
             home::Action::About => editor.about = true,
+            home::Action::Menu(rect) => {
+                editor.menu.trigger = Some(rect);
+                editor.menu.select(7);
+            }
+            home::Action::CloseHome => editor.home.visible = false,
+            home::Action::Minimize => editor.window_action = Some(WindowAction::Minimize),
+            home::Action::Maximize => editor.window_action = Some(WindowAction::ToggleMaximize),
+            home::Action::DragWindow => editor.window_action = Some(WindowAction::Drag),
+            home::Action::CloseWindow => {
+                if scene.0.dirty() || editor.active.is_some() || tabs.dirty() {
+                    editor.closing = true;
+                } else {
+                    exit.write(AppExit::Success);
+                }
+            }
             home::Action::Error(error) => editor.report_error(error),
             home::Action::RemoveRecent { path, delete_file } => {
                 if delete_file && is_open(&path) {
@@ -1080,7 +1098,7 @@ pub fn ui(
             }
         }
     }
-    let light = editor.light;
+    let light = editor.light && !editor.home.visible;
     let can_save = !editor.tabs_blocked();
     effects.light = light;
     editor.menu.can_undo = scene.0.history.can_undo();
@@ -1192,96 +1210,99 @@ pub fn ui(
             dock_menu::Action::Help => editor.help = true,
         }
     }
-    let controls = egui::Area::new("window-controls".into())
-        .anchor(egui::Align2::RIGHT_TOP, [-16.0, theme::dock_top(ctx)])
-        .show(ctx, |ui| {
-            theme::chrome_frame(editor.light).show(ui, |ui| {
-                theme::chrome_style(ui, editor.light);
-                let compact = ctx.content_rect().width() < 900.0;
-                let minimal = ctx.content_rect().width() < 500.0;
-                if compact {
-                    ui.spacing_mut().button_padding.x = 4.0;
-                    ui.spacing_mut().item_spacing.x = 2.0;
-                }
-                ui.horizontal(|ui| {
-                    let enabled = !editor.tabs_blocked() && !editor.closing && !tabs.closing_tab();
-                    let menu = ui
-                        .add_enabled(
-                            enabled,
-                            egui::Button::new("⋯")
-                                .frame(false)
-                                .min_size(egui::vec2(28.0, 32.0))
-                                .selected(editor.menu.open),
-                        )
-                        .on_hover_text("工作区菜单");
-                    editor.menu.trigger = Some(menu.rect);
-                    if menu.clicked() {
-                        if editor.menu.open && editor.menu.section == 7 {
-                            editor.menu.open = false;
-                        } else {
-                            editor.menu.select(7);
+    if !editor.home.visible {
+        let controls = egui::Area::new("window-controls".into())
+            .anchor(egui::Align2::RIGHT_TOP, [-16.0, theme::dock_top(ctx)])
+            .show(ctx, |ui| {
+                theme::chrome_frame(editor.light).show(ui, |ui| {
+                    theme::chrome_style(ui, editor.light);
+                    let compact = ctx.content_rect().width() < 900.0;
+                    let minimal = ctx.content_rect().width() < 500.0;
+                    if compact {
+                        ui.spacing_mut().button_padding.x = 4.0;
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                    }
+                    ui.horizontal(|ui| {
+                        let enabled =
+                            !editor.tabs_blocked() && !editor.closing && !tabs.closing_tab();
+                        let menu = ui
+                            .add_enabled(
+                                enabled,
+                                egui::Button::new("⋯")
+                                    .frame(false)
+                                    .min_size(egui::vec2(28.0, 32.0))
+                                    .selected(editor.menu.open),
+                            )
+                            .on_hover_text("工作区菜单");
+                        editor.menu.trigger = Some(menu.rect);
+                        if menu.clicked() {
+                            if editor.menu.open && editor.menu.section == 7 {
+                                editor.menu.open = false;
+                            } else {
+                                editor.menu.select(7);
+                            }
                         }
-                    }
-                    if !minimal
-                        && ui
-                            .add(dock_button(&editor, ui, 22))
-                            .on_hover_text("搜索最近文件")
-                            .clicked()
-                    {
-                        editor.home.visible = true;
-                    }
-                    if ui
-                        .add(dock_button(&editor, ui, 11))
-                        .on_hover_text("切换深色 / 浅色模式")
-                        .clicked()
-                    {
-                        editor.light = !editor.light;
-                        theme::apply(ctx, editor.light);
-                    }
-                    if !minimal
-                        && ui
-                            .add(dock_button(&editor, ui, 23).selected(
-                                window.window_level == bevy::window::WindowLevel::AlwaysOnTop,
-                            ))
-                            .on_hover_text("窗口置顶")
-                            .clicked()
-                    {
-                        editor.window_action = Some(WindowAction::Pin);
-                    }
-                    if !cfg!(target_os = "macos")
-                        && !compact
-                        && ui
-                            .add(dock_button(&editor, ui, 5))
-                            .on_hover_text("最小化")
-                            .clicked()
-                    {
-                        editor.window_action = Some(WindowAction::Minimize);
-                    }
-                    if !cfg!(target_os = "macos")
-                        && !compact
-                        && ui
-                            .add(dock_button(&editor, ui, 6))
-                            .on_hover_text("最大化 / 还原")
-                            .clicked()
-                    {
-                        editor.window_action = Some(WindowAction::ToggleMaximize);
-                    }
-                    if !cfg!(target_os = "macos")
-                        && ui
-                            .add(dock_button(&editor, ui, 7))
-                            .on_hover_text("关闭窗口")
-                            .clicked()
-                    {
-                        if scene.0.dirty() || editor.active.is_some() || tabs.dirty() {
-                            editor.closing = true;
-                        } else {
-                            exit.write(AppExit::Success);
+                        if !minimal
+                            && ui
+                                .add(dock_button(&editor, ui, 22))
+                                .on_hover_text("搜索最近文件")
+                                .clicked()
+                        {
+                            editor.home.visible = true;
                         }
-                    }
+                        if ui
+                            .add(dock_button(&editor, ui, 11))
+                            .on_hover_text("切换深色 / 浅色模式")
+                            .clicked()
+                        {
+                            editor.light = !editor.light;
+                            theme::apply(ctx, editor.light);
+                        }
+                        if !minimal
+                            && ui
+                                .add(dock_button(&editor, ui, 23).selected(
+                                    window.window_level == bevy::window::WindowLevel::AlwaysOnTop,
+                                ))
+                                .on_hover_text("窗口置顶")
+                                .clicked()
+                        {
+                            editor.window_action = Some(WindowAction::Pin);
+                        }
+                        if !cfg!(target_os = "macos")
+                            && !compact
+                            && ui
+                                .add(dock_button(&editor, ui, 5))
+                                .on_hover_text("最小化")
+                                .clicked()
+                        {
+                            editor.window_action = Some(WindowAction::Minimize);
+                        }
+                        if !cfg!(target_os = "macos")
+                            && !compact
+                            && ui
+                                .add(dock_button(&editor, ui, 6))
+                                .on_hover_text("最大化 / 还原")
+                                .clicked()
+                        {
+                            editor.window_action = Some(WindowAction::ToggleMaximize);
+                        }
+                        if !cfg!(target_os = "macos")
+                            && ui
+                                .add(dock_button(&editor, ui, 7))
+                                .on_hover_text("关闭窗口")
+                                .clicked()
+                        {
+                            if scene.0.dirty() || editor.active.is_some() || tabs.dirty() {
+                                editor.closing = true;
+                            } else {
+                                exit.write(AppExit::Success);
+                            }
+                        }
+                    });
                 });
             });
-        });
-    editor.dock_space = Some((ctx.content_rect().left(), controls.response.rect.left()));
+        editor.dock_space = Some((ctx.content_rect().left(), controls.response.rect.left()));
+    }
     tabs.bar(ctx, &scene.0, &mut editor);
     if !editor.home.visible {
         egui::Area::new("status".into())
@@ -1340,23 +1361,23 @@ pub fn ui(
         egui::Window::new("关于 Ravomi")
             .title_bar(false)
             .resizable(false)
-            .frame(theme::tool_frame(editor.light))
+            .frame(theme::tool_frame(light))
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
             .fixed_size(egui::vec2(width, height.min(600.0)))
             .show(ctx, |ui| {
-                theme::tool_style(ui, editor.light);
+                theme::tool_style(ui, light);
                 ui.spacing_mut().scroll.fade.strength = 0.0;
-                close = theme::tool_header(ui, "关于 Ravomi", editor.light);
+                close = theme::tool_header(ui, "关于 Ravomi", light);
                 egui::ScrollArea::vertical()
                     .max_height(height - 48.0)
-                    .show(ui, |ui| about_content(ui, editor.light));
+                    .show(ui, |ui| about_content(ui, light));
             });
         if close || ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
             editor.about = false;
         }
     }
     let mut enter_commit = false;
-    let light = editor.light;
+    let light = editor.light && !editor.home.visible;
     let clipboard_empty = editor.clipboard.is_empty();
     if let Some(action) = editor
         .tools

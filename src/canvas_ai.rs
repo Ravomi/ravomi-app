@@ -425,44 +425,46 @@ pub fn ui(
         && windows.single().is_ok_and(|w| w.focused)
         && !interaction.selected.is_empty();
     let mut submit = submit_key;
-    egui::Area::new("canvas-ai-entry".into())
-        .anchor(egui::Align2::RIGHT_TOP, [-20.0, 86.0])
-        .show(ctx, |ui| {
-            theme::chrome_style(ui, editor.light);
-            let colors = theme::chrome_palette(editor.light);
-            let response = ui.add(
-                egui::Button::new((
-                    egui::Atom::grow(),
-                    egui::RichText::new("协作").color(if state.open {
-                        colors.ink
+    if !editor.home_visible() {
+        egui::Area::new("canvas-ai-entry".into())
+            .anchor(egui::Align2::RIGHT_TOP, [-20.0, 86.0])
+            .show(ctx, |ui| {
+                theme::chrome_style(ui, editor.light);
+                let colors = theme::chrome_palette(editor.light);
+                let response = ui.add(
+                    egui::Button::new((
+                        egui::Atom::grow(),
+                        egui::RichText::new("协作").color(if state.open {
+                            colors.ink
+                        } else {
+                            colors.foreground
+                        }),
+                        egui::Atom::grow(),
+                    ))
+                    .min_size(egui::vec2(80.0, 36.0))
+                    .corner_radius(18)
+                    .selected(state.open)
+                    .fill(if state.open {
+                        colors.active
                     } else {
-                        colors.foreground
+                        colors.surface
                     }),
-                    egui::Atom::grow(),
-                ))
-                .min_size(egui::vec2(80.0, 36.0))
-                .corner_radius(18)
-                .selected(state.open)
-                .fill(if state.open {
-                    colors.active
-                } else {
-                    colors.surface
-                }),
-            );
-            if response
-                .on_hover_text("打开画布协作 · Pi 引擎\n选中文本或分组，按 Space 提交任务")
-                .clicked()
-            {
-                state.open = !state.open;
-            }
-        });
+                );
+                if response
+                    .on_hover_text("打开画布协作 · Pi 引擎\n选中文本或分组，按 Space 提交任务")
+                    .clicked()
+                {
+                    state.open = !state.open;
+                }
+            });
+    }
     let selected_runs = bindings.selected_runs(&scene.0, &interaction.selected, &connected);
     let mut command = None;
     let mut new_skill = false;
     let mut connect = false;
     let mut open = state.open || submit_key;
     let mut close = false;
-    if open {
+    if open && !editor.home_visible() {
         egui::Window::new("画布协作").title_bar(false).frame(theme::tool_frame(editor.light)).open(&mut open).default_width(430.0).min_width(120.0).max_width((ctx.content_rect().width() - 64.0).max(120.0)).default_pos([700.0, 135.0]).show(ctx, |ui| {
             theme::tool_style(ui, editor.light);
             ui.spacing_mut().scroll.fade.strength = 0.0;

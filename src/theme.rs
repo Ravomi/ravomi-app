@@ -213,6 +213,16 @@ pub fn chrome_style(ui: &mut egui::Ui, light: bool) {
     visuals.widgets.inactive.weak_bg_fill = p.surface;
 }
 
+/// The reference home uses a fixed graphite appearance, independently of the canvas.
+pub fn home_palette() -> DockPalette {
+    let mut palette = chrome_palette(false);
+    palette.surface = egui::Color32::from_rgb(35, 37, 44);
+    palette.ink = egui::Color32::from_rgb(25, 27, 31);
+    palette.border = egui::Color32::from_rgb(57, 60, 70);
+    palette.muted = egui::Color32::from_rgb(164, 168, 180);
+    palette
+}
+
 pub fn tool_frame(light: bool) -> egui::Frame {
     let p = chrome_palette(light);
     egui::Frame::new()
