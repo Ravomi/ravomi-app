@@ -40,6 +40,14 @@ fn edit_shortcut(input: &mut egui::InputState, composing: bool, focused: bool) -
     (finish, enter)
 }
 
+fn outside_edit_press(input: &egui::InputState, rect: egui::Rect) -> bool {
+    input.pointer.primary_pressed()
+        && input
+            .pointer
+            .interact_pos()
+            .is_some_and(|p| !rect.contains(p))
+}
+
 #[allow(deprecated)]
 pub(super) fn composition_frame(composing: &mut bool, events: &[egui::Event]) -> bool {
     let mut active = *composing;
@@ -313,6 +321,40 @@ mod inline_edit_tests {
                 );
             });
             output.textures_delta.clear();
+        }
+    }
+
+    #[test]
+    fn outside_press_hands_off_before_release_but_inside_press_does_not() {
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(100.0, 100.0));
+        for (position, expected) in [
+            (egui::pos2(200.0, 200.0), true),
+            (egui::pos2(50.0, 50.0), false),
+        ] {
+            let ctx = egui::Context::default();
+            for pressed in [true, false] {
+                let mut output = ctx.run_ui(
+                    egui::RawInput {
+                        events: vec![
+                            egui::Event::PointerMoved(position),
+                            egui::Event::PointerButton {
+                                pos: position,
+                                button: egui::PointerButton::Primary,
+                                pressed,
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                    |ui| {
+                        assert_eq!(
+                            ui.ctx().input(|i| outside_edit_press(i, rect)),
+                            expected && pressed
+                        );
+                    },
+                );
+                output.textures_delta.clear();
+            }
         }
     }
 }
@@ -1433,6 +1475,9 @@ pub fn ui(
         }
     }
     let mut cancel_edit = false;
+    // An outside press both finishes native text editing and starts a canvas click.
+    // Waiting for release swallowed the first half of an empty-canvas double click.
+    let mut canvas_press_handoff = false;
     let serial = editor.serial;
     let web_input = editor.web_input;
     if let Some(edit) = &mut editor.active {
@@ -1569,11 +1614,9 @@ pub fn ui(
             );
             if !ime_frame && window.focused && !first_frame {
                 ctx.input(|i| {
-                    if i.pointer.primary_clicked()
-                        && let Some(p) = i.pointer.interact_pos()
-                        && !rect.contains(p)
-                    {
+                    if outside_edit_press(i, rect) {
                         commit = true;
+                        canvas_press_handoff = true;
                     }
                 });
                 commit |= result.inner.lost_focus();
@@ -1589,6 +1632,13 @@ pub fn ui(
     if commit {
         let edited_id = editor.active.as_ref().map(|edit| edit.id.clone());
         editor.commit(&mut scene.0);
+        if canvas_press_handoff && editor.active.is_none() {
+            ctx.memory_mut(|memory| {
+                if let Some(id) = memory.focused() {
+                    memory.surrender_focus(id);
+                }
+            });
+        }
         if enter_commit
             && let Some(node) = scene
                 .0
@@ -1744,8 +1794,8 @@ pub fn ui(
         || editor.error.is_some()
         || editor.dialog.is_some();
     editor.navigation_capture |= editor.importing.is_some();
-    editor.capture =
-        editor.navigation_capture || active_at_start || ctx.egui_wants_keyboard_input();
+    editor.capture = editor.navigation_capture
+        || (!canvas_press_handoff && (active_at_start || ctx.egui_wants_keyboard_input()));
     if !ctx.input(|i| i.pointer.any_down()) {
         editor.gesture = false;
     }
