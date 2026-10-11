@@ -548,6 +548,13 @@ pub fn ui(
                 }
                 ui.separator(); ui.heading("运行记录");
                 for w in connected.workflows.iter().rev() {
+                    if let Some(run) = w.runs.last().filter(|run| run.status == ai::Status::Failed) {
+                        ui.label(format!("{}：{}失败", w.goal.chars().take(30).collect::<String>(), if run.task_id == "$plan" { "任务规划" } else { "运行" }));
+                        if let Some(error) = &run.error { ui.label(error); }
+                        if ui.add_enabled(!state.busy, egui::Button::new("配置完成后重试")).clicked() {
+                            command = Some(ai::Command::Retry { id: w.id.clone(), run_id: run.id.clone() });
+                        }
+                    }
                     ui.collapsing(format!("{} · {}", w.goal.chars().take(30).collect::<String>(), &w.id[..8]), |ui| {
                         ui.horizontal_wrapped(|ui| {
                             if ui.button("暂停派发").clicked() { state.auto_start.remove(&w.id); command = Some(ai::Command::Pause { id: w.id.clone() }); }
