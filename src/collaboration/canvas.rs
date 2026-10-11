@@ -275,7 +275,15 @@ impl Bindings {
                             .as_ref()
                             .or(w.draft_plan.as_ref())
                             .and_then(|p| p.tasks.iter().find(|t| t.id == task_id))
-                            .map(|t| t.dependencies.clone())
+                            .map(|t| {
+                                let mut upstream = t.dependencies.clone();
+                                if let Some(parent) = &t.parent_agent
+                                    && !upstream.contains(parent)
+                                {
+                                    upstream.push(parent.clone());
+                                }
+                                upstream
+                            })
                             .unwrap_or_default();
                         binding
                             .agents
@@ -293,7 +301,13 @@ impl Bindings {
                                 id: id(),
                                 members: vec![index, group],
                                 rates: vec![[1.0, 0.5], [0.0, 0.5]],
-                                text: String::new(),
+                                text: if binding.agents.iter().any(|a| {
+                                    a.group_id == source && parent.as_ref() == Some(&a.task_id)
+                                }) {
+                                    "委派".into()
+                                } else {
+                                    String::new()
+                                },
                                 ..Default::default()
                             })
                             .map_err(|e| e.to_string())?;
@@ -342,7 +356,8 @@ impl Bindings {
 fn response_body(w: &Workflow, task_id: &str, run: Option<&Run>, parent: Option<&str>) -> String {
     if let Some(run) = run {
         if let Some(proposal) = &run.proposal {
-            return proposal.summary.clone();
+            return network::summary_text(&proposal.summary)
+                .unwrap_or_else(|| proposal.summary.clone());
         }
         if let Some(error) = &run.error {
             return format!("任务未完成。\n{error}");
@@ -408,6 +423,7 @@ fn layer(workflow: &Workflow, task_id: &str, remaining: usize) -> usize {
             1 + t
                 .dependencies
                 .iter()
+                .chain(t.parent_agent.iter())
                 .map(|id| layer(workflow, id, remaining - 1))
                 .max()
                 .unwrap_or(0)

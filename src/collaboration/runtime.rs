@@ -1,4 +1,6 @@
 use super::*;
+#[path = "delegation.rs"]
+mod delegation;
 use std::{
     io::Write,
     path::PathBuf,
@@ -304,6 +306,7 @@ impl Runtime {
                         previous.sources,
                     );
                     run.retry_of = Some(previous.id);
+                    run.delegation = previous.delegation;
                     w.runs.push(run);
                 }
                 Command::Resolve { id, run_id } => {
@@ -473,14 +476,37 @@ impl Runtime {
                                 serde_json::from_str(&run.prompt).map_err(|e| e.to_string())?;
                             pi::test_command(&argv, temp.path(), &cancel, timeout)
                         } else {
-                            runtime.0.executor.execute(
-                                &model,
-                                &run.prompt,
-                                temp.path(),
-                                &cancel,
+                            let progress = |delta: &str| runtime.progress(&run.id, delta);
+                            let request = pi::Execution {
+                                model: &model,
+                                prompt: &run.prompt,
+                                cwd: temp.path(),
+                                cancel: &cancel,
                                 timeout,
-                                &|delta| runtime.progress(&run.id, delta),
-                            )
+                                progress: &progress,
+                            };
+                            // First slice: only planned roots can delegate. Children
+                            // have the same model and narrower, explicit input.
+                            if !run.task_id.starts_with('$') && run.delegation.is_none() {
+                                let started = std::time::Instant::now();
+                                runtime.0.executor.execute_delegating(
+                                    request,
+                                    &|call, name, args| {
+                                        runtime.delegate(
+                                            &run.id, call, name, args, &cancel, started, timeout,
+                                        )
+                                    },
+                                )
+                            } else {
+                                runtime.0.executor.execute(
+                                    &model,
+                                    &run.prompt,
+                                    temp.path(),
+                                    &cancel,
+                                    timeout,
+                                    &progress,
+                                )
+                            }
                         }
                     })();
                     runtime.complete(&run.id, output);
@@ -511,10 +537,58 @@ impl Runtime {
         }
     }
 
-    fn complete(&self, run_id: &str, output: Result<pi::Output>) {
+    fn complete(&self, run_id: &str, mut output: Result<pi::Output>) {
         if let Ok(mut state) = self.0.state.lock() {
             state.active.remove(run_id);
             let mut next = state.snapshot.clone();
+            if let Some(parent) = next
+                .workflows
+                .iter()
+                .flat_map(|w| &w.runs)
+                .find(|r| r.id == run_id)
+            {
+                if parent.status == Status::Stopping {
+                    output = Err("运行已取消".into());
+                } else if output.is_ok()
+                    && next.workflows.iter().flat_map(|w| &w.runs).any(|r| {
+                        r.delegation
+                            .as_ref()
+                            .is_some_and(|d| d.parent_run_id == run_id)
+                            && (matches!(
+                                r.status,
+                                Status::Queued
+                                    | Status::Running
+                                    | Status::Stopping
+                                    | Status::StorageBlocked
+                            ) || (r.status == Status::Succeeded
+                                && !parent.delegated_results.contains(&r.id)))
+                    })
+                {
+                    output = Err("主 Agent 未收集全部子任务的已保存成果".into());
+                }
+            }
+            // A completed/crashed parent cannot leave hidden billable workers.
+            // Stop children, retaining their evidence and awaiting real exit.
+            for child in next
+                .workflows
+                .iter_mut()
+                .flat_map(|w| &mut w.runs)
+                .filter(|r| {
+                    r.delegation
+                        .as_ref()
+                        .is_some_and(|d| d.parent_run_id == run_id)
+                })
+            {
+                if child.status == Status::Queued {
+                    child.status = Status::Cancelled;
+                    child.finished_at = Some(now());
+                } else if matches!(child.status, Status::Running | Status::Stopping) {
+                    child.status = Status::Stopping;
+                    if let Some(cancel) = state.active.get(&child.id) {
+                        cancel.store(true, Ordering::Release);
+                    }
+                }
+            }
             finish(&mut next, run_id, output.clone());
             if let Err(error) = persist(&self.0.path, &next) {
                 state.pending.insert(run_id.into(), output);
@@ -654,6 +728,8 @@ fn new_run(task: &str, prompt: String, input_files: Vec<SourceFile>, sources: Ve
         usage: None,
         session_id: None,
         retry_of: None,
+        delegation: None,
+        delegated_results: vec![],
     }
 }
 pub(super) fn effective_files(w: &Workflow, run_id: &str) -> Result<Vec<SourceFile>> {
@@ -663,8 +739,14 @@ pub(super) fn effective_files(w: &Workflow, run_id: &str) -> Result<Vec<SourceFi
         .find(|r| r.id == run_id && r.status == Status::Succeeded)
         .ok_or("代码运行未成功")?;
     let proposal = run.proposal.as_ref().ok_or("运行没有代码工件")?;
-    let mut files: BTreeMap<_, _> = run
-        .input_files
+    let delegated_files;
+    let input = if run.delegated_results.is_empty() {
+        &run.input_files
+    } else {
+        delegated_files = merge_inputs(w, &run.delegated_results)?;
+        &delegated_files
+    };
+    let mut files: BTreeMap<_, _> = input
         .iter()
         .map(|f| (f.path.clone(), f.content.clone()))
         .collect();
@@ -709,7 +791,12 @@ fn finish(snapshot: &mut Snapshot, run_id: &str, output: Result<pi::Output>) {
                     skills::validate(&w.goal, &proposal.files[0].content)?;
                 }
                 run.proposal = Some(proposal);
-                let sources = run.sources.clone();
+                let sources = run
+                    .sources
+                    .iter()
+                    .chain(&run.delegated_results)
+                    .cloned()
+                    .collect::<Vec<_>>();
                 for path in conflicting_sources(w, &sources)? {
                     if !w.runs[index]
                         .proposal
@@ -813,7 +900,7 @@ fn task_prompt(
         Ok(serde_json::json!({"runId":r.id,"taskId":r.task_id,"summary":r.proposal.as_ref().map(|p| &p.summary),"files":effective_files(w, id)?}))
     }).collect::<Result<Vec<_>>>()?;
     Ok(format!(
-        "你是 Ravomi 的 {} Agent。目标：{}\n本任务：{}\n完成条件：{}\n只返回 JSON：{{\"summary\":\"改动说明、检查结论与未解决问题\",\"files\":[{{\"path\":\"src/example.js\",\"content\":\"该文件完整 UTF-8 内容\"}}]}}。仅列出新增或修改文件，不支持删除。检查任务无改动时 files=[]。工具已禁用，不声称运行过命令；测试由用户从 Ravomi 单独启动。不添加外部访问、凭据或未经要求的依赖。不输出图像。发现交接的同名文件冲突时，明确合并并在 files 返回解决后的完整文件，不能丢弃分支成果。\n固定输入源码：{}\n上游工件与来源：{}",
+        "你是 Ravomi 的 {} Agent。目标：{}\n本任务：{}\n完成条件：{}\n最终只返回 JSON：{{\"summary\":\"改动说明、检查结论与未解决问题\",\"files\":[{{\"path\":\"src/example.js\",\"content\":\"该文件完整 UTF-8 内容\"}}]}}。仅列出新增或修改文件，不支持删除。检查任务无改动时 files=[]。可用 spawn_agent 委派独立子任务、wait_agent 收集固定成果，最终答复前等待全部子任务并汇总；文件和终端工具禁用，不声称运行过命令；测试由用户从 Ravomi 单独启动。不添加外部访问、凭据或未经要求的依赖。不输出图像。发现交接的同名文件冲突时，明确合并并在 files 返回解决后的完整文件，不能丢弃分支成果。\n固定输入源码：{}\n上游工件与来源：{}",
         task.role,
         w.goal,
         instruction,

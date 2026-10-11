@@ -146,6 +146,315 @@ fn wait(runtime: &Runtime, predicate: impl Fn(&Workflow) -> bool) -> Workflow {
     }
 }
 
+#[derive(Default)]
+struct DelegatingFake {
+    children: AtomicUsize,
+    hold: AtomicBool,
+    abandon: bool,
+}
+impl pi::Executor for DelegatingFake {
+    fn execute(
+        &self,
+        model: &str,
+        prompt: &str,
+        cwd: &Path,
+        cancel: &AtomicBool,
+        timeout: u64,
+        progress: &dyn Fn(&str),
+    ) -> Result<pi::Output> {
+        if prompt.contains("你是独立子 Agent") {
+            let number = self.children.fetch_add(1, Ordering::SeqCst) + 1;
+            let start = Instant::now();
+            while self.children.load(Ordering::SeqCst) < 2 || self.hold.load(Ordering::Acquire) {
+                if cancel.load(Ordering::Acquire) {
+                    return Err("运行已取消".into());
+                }
+                if start.elapsed().as_secs() > 5 {
+                    return Err("children did not run concurrently".into());
+                }
+                thread::yield_now();
+            }
+            return Ok(pi::Output {
+                text: serde_json::to_string(&Proposal {
+                    summary: "独立子任务成果".into(),
+                    files: vec![SourceFile {
+                        path: format!("child-{number}.txt"),
+                        content: "saved child result".into(),
+                    }],
+                })
+                .unwrap(),
+                usage: None,
+                session_id: Some(id()),
+            });
+        }
+        Fake::default().execute(model, prompt, cwd, cancel, timeout, progress)
+    }
+    fn execute_delegating(
+        &self,
+        request: pi::Execution<'_>,
+        tools: &dyn Fn(&str, &str, serde_json::Value) -> Result<serde_json::Value>,
+    ) -> Result<pi::Output> {
+        let args = serde_json::json!({"title":"独立检查","instruction":"分析一个独立方面","acceptance":"返回结论"});
+        let first = tools("first", "spawn_agent", args.clone())?;
+        assert_eq!(first, tools("first", "spawn_agent", args.clone())?);
+        assert!(
+            tools(
+                "first",
+                "spawn_agent",
+                serde_json::json!({"title":"修改","instruction":"不同任务","acceptance":"结论"})
+            )
+            .is_err()
+        );
+        let second = tools("second", "spawn_agent", args)?;
+        if self.abandon {
+            return Ok(pi::Output {
+                text: r#"{"summary":"premature completion","files":[]}"#.into(),
+                usage: None,
+                session_id: None,
+            });
+        }
+        assert!(
+            tools(
+                "foreign",
+                "wait_agent",
+                serde_json::json!({"run_id":"not-my-child"})
+            )
+            .is_err()
+        );
+        for (call, child) in [("wait-first", first), ("wait-second", second)] {
+            let result = tools(
+                call,
+                "wait_agent",
+                serde_json::json!({"run_id":child["run_id"]}),
+            )?;
+            if request.cancel.load(Ordering::Acquire) {
+                return Err("运行已取消".into());
+            }
+            assert_eq!(result["status"], "succeeded");
+        }
+        Ok(pi::Output {
+            text: r#"{"summary":"已汇总两个固定成果","files":[]}"#.into(),
+            usage: None,
+            session_id: Some(id()),
+        })
+    }
+}
+
+fn start_delegating(runtime: &Runtime) -> String {
+    let id = runtime
+        .command(Command::Create {
+            project: String::new(),
+            paths: vec![],
+            goal: "并行分析问题".into(),
+            model: "test/fake".into(),
+            test_command: vec![],
+        })
+        .unwrap()
+        .workflows[0]
+        .id
+        .clone();
+    wait(runtime, |w| w.draft_plan.is_some());
+    runtime
+        .command(Command::SetPlan {
+            id: id.clone(),
+            plan: Plan {
+                tasks: vec![task("root", &[], None)],
+            },
+        })
+        .unwrap();
+    runtime.command(Command::Start { id: id.clone() }).unwrap();
+    id
+}
+
+#[test]
+fn dynamic_delegation_is_parallel_idempotent_and_survives_mio() {
+    let directory = tempfile::tempdir().unwrap();
+    let fake = Arc::new(DelegatingFake {
+        hold: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let runtime = Runtime::with_executor(directory.path().into(), fake.clone()).unwrap();
+    let workflow_id = start_delegating(&runtime);
+    wait(&runtime, |w| {
+        w.runs.iter().filter(|r| r.delegation.is_some()).count() == 2
+    });
+    let mut doc = crate::document::Document::blank().unwrap();
+    let mut bindings = canvas::Bindings::default();
+    bindings.workflows.push(canvas::Binding {
+        workflow_id,
+        input_ids: vec![],
+        anchor: [0.0, 0.0],
+        agents: vec![],
+        answer_maps: vec![],
+    });
+    bindings
+        .sync(&mut doc, &runtime.snapshot().unwrap())
+        .unwrap();
+    fake.hold.store(false, Ordering::Release);
+    let w = wait(&runtime, |w| {
+        latest(w, "root").is_some_and(|r| r.status == Status::Succeeded)
+    });
+    assert_eq!(fake.children.load(Ordering::SeqCst), 2);
+    let parent = latest(&w, "root").unwrap();
+    assert_eq!(parent.delegated_results.len(), 2);
+    assert_eq!(runtime::effective_files(&w, &parent.id).unwrap().len(), 2);
+    assert_eq!(w.runs.len(), 4);
+    for child in w.runs.iter().filter(|r| r.delegation.is_some()) {
+        assert_eq!(child.delegation.as_ref().unwrap().parent_run_id, parent.id);
+        assert!(!child.sources.contains(&parent.id));
+    }
+    validate_plan(w.plan.as_ref().unwrap()).unwrap();
+    bindings
+        .sync(&mut doc, &runtime.snapshot().unwrap())
+        .unwrap();
+    assert_eq!(bindings.workflows[0].agents.len(), 4);
+    assert!(doc.graph.nodes.iter().any(|n| n.text.contains("独立检查")));
+    let path = directory.path().join("delegation.mio");
+    doc.save(&path).unwrap();
+    let reopened = crate::document::Document::open(&path).unwrap();
+    assert_eq!(
+        reopened.history_archive().workflows[0]
+            .runs
+            .iter()
+            .filter(|r| r.delegation.is_some())
+            .count(),
+        2
+    );
+    runtime.shutdown().unwrap();
+    drop(runtime);
+    let reopened =
+        Runtime::with_executor(directory.path().into(), Arc::new(Fake::default())).unwrap();
+    assert_eq!(reopened.snapshot().unwrap().workflows[0].runs.len(), 4);
+    reopened.shutdown().unwrap();
+}
+
+#[test]
+fn stopping_parent_cancels_children_without_deleting_evidence() {
+    let directory = tempfile::tempdir().unwrap();
+    let fake = Arc::new(DelegatingFake {
+        hold: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let runtime = Runtime::with_executor(directory.path().into(), fake).unwrap();
+    let workflow_id = start_delegating(&runtime);
+    wait(&runtime, |w| {
+        w.runs
+            .iter()
+            .filter(|r| r.delegation.is_some() && r.status == Status::Running)
+            .count()
+            == 2
+    });
+    runtime
+        .command(Command::Stop {
+            id: workflow_id,
+            task_id: Some("root".into()),
+        })
+        .unwrap();
+    let w = wait(&runtime, |w| {
+        w.runs
+            .iter()
+            .filter(|r| r.task_id != "$plan")
+            .all(|r| r.status == Status::Cancelled)
+    });
+    assert_eq!(w.runs.len(), 4);
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn parent_cannot_finish_successfully_with_uncollected_children() {
+    let directory = tempfile::tempdir().unwrap();
+    let fake = Arc::new(DelegatingFake {
+        hold: AtomicBool::new(true),
+        abandon: true,
+        ..Default::default()
+    });
+    let runtime = Runtime::with_executor(directory.path().into(), fake).unwrap();
+    start_delegating(&runtime);
+    let w = wait(&runtime, |w| {
+        latest(w, "root").is_some_and(|r| r.status == Status::Failed)
+            && w.runs
+                .iter()
+                .filter(|r| r.delegation.is_some())
+                .all(|r| r.status == Status::Cancelled)
+    });
+    assert_eq!(w.runs.len(), 4);
+    assert!(
+        latest(&w, "root")
+            .unwrap()
+            .error
+            .as_ref()
+            .unwrap()
+            .contains("未收集")
+    );
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+#[ignore = "calls DeepSeek through the bundled Pi engine using configured credentials"]
+fn real_pi_dynamic_delegation() {
+    let directory = tempfile::tempdir().unwrap();
+    // Seed an explicitly approved plan without spending a planning model call.
+    let runtime =
+        Runtime::with_executor(directory.path().into(), Arc::new(Fake::default())).unwrap();
+    let workflow_id = runtime
+        .command(Command::Create {
+            project: String::new(),
+            paths: vec![],
+            goal: "比较 SQLite 的事务与索引".into(),
+            model: "deepseek/deepseek-flash".into(),
+            test_command: vec![],
+        })
+        .unwrap()
+        .workflows[0]
+        .id
+        .clone();
+    wait(&runtime, |w| w.draft_plan.is_some());
+    let mut root = task("root", &[], None);
+    root.instruction = "必须调用 spawn_agent 两次，分别让子 Agent 用一句话解释 SQLite 事务与索引。先创建两个，再逐一调用 wait_agent，最后汇总两个成果。不创建文件。".into();
+    runtime
+        .command(Command::SetPlan {
+            id: workflow_id.clone(),
+            plan: Plan { tasks: vec![root] },
+        })
+        .unwrap();
+    runtime.shutdown().unwrap();
+    drop(runtime);
+    let runtime = Runtime::open(directory.path().into()).unwrap();
+    runtime.command(Command::Start { id: workflow_id }).unwrap();
+    let start = Instant::now();
+    loop {
+        let snapshot = runtime.snapshot().unwrap();
+        let w = &snapshot.workflows[0];
+        let root = latest(w, "root").unwrap();
+        if !matches!(root.status, Status::Running | Status::Queued) {
+            runtime.shutdown().unwrap();
+            assert_eq!(root.status, Status::Succeeded, "{:?}", root.error);
+            assert_eq!(w.runs.iter().filter(|r| r.delegation.is_some()).count(), 2);
+            assert_eq!(root.delegated_results.len(), 2);
+            assert!(w.runs.iter().all(|r| r.status == Status::Succeeded));
+            let history =
+                crate::project_history::History::capture(&snapshot, std::slice::from_ref(&w.id))
+                    .unwrap();
+            let mut document = crate::document::Document::blank().unwrap();
+            document.attach_history(history.clone()).unwrap();
+            let path = directory.path().join("real-delegation.mio");
+            document.save(&path).unwrap();
+            assert_eq!(
+                crate::document::Document::open(&path)
+                    .unwrap()
+                    .history_archive(),
+                &history
+            );
+            break;
+        }
+        if start.elapsed().as_secs() > 200 {
+            runtime.shutdown().unwrap();
+            panic!("real delegation timed out");
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
 #[test]
 fn canvas_only_workflow_runs_and_survives_mio_without_external_project() {
     use crate::document::Document;
@@ -561,13 +870,15 @@ fn skill_evidence_keeps_failed_running_states_and_rejects_missing_versions() {
 }
 
 #[test]
-fn plan_rejects_cycles_unknown_inputs_and_unrelated_delegation() {
+fn plan_separates_delegation_from_dependencies_and_rejects_cycles() {
     validate_plan(&plan()).unwrap();
     let mut value = plan();
     value.tasks[0].dependencies = vec!["join".into()];
     assert!(validate_plan(&value).unwrap_err().contains('环'));
     let mut value = plan();
     value.tasks[2].parent_agent = Some("tests".into());
+    validate_plan(&value).unwrap();
+    value.tasks[1].parent_agent = Some("check".into());
     assert!(validate_plan(&value).is_err());
     let mut value = plan();
     value.tasks[0].dependencies = vec!["missing".into()];

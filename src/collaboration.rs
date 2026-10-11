@@ -88,6 +88,19 @@ pub struct Run {
     pub usage: Option<serde_json::Value>,
     pub session_id: Option<String>,
     pub retry_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation: Option<Delegation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delegated_results: Vec<String>,
+}
+
+/// A live delegation is not a dependency on the unfinished parent's output.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Delegation {
+    pub parent_run_id: String,
+    pub call_id: String,
+    pub request: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -356,9 +369,21 @@ fn validate_plan(plan: &Plan) -> Result<()> {
         if task
             .parent_agent
             .as_ref()
-            .is_some_and(|p| !task.dependencies.contains(p))
+            .is_some_and(|p| p == &task.id || !ids.contains(p.as_str()))
         {
-            return Err("子 Agent 必须依赖父 Agent 的固定成果".into());
+            return Err("子 Agent 的父代理不存在或指向自身".into());
+        }
+        let mut ancestry = BTreeSet::from([task.id.as_str()]);
+        let mut parent = task.parent_agent.as_deref();
+        while let Some(id) = parent {
+            if !ancestry.insert(id) {
+                return Err("代理委派存在环".into());
+            }
+            parent = plan
+                .tasks
+                .iter()
+                .find(|t| t.id == id)
+                .and_then(|t| t.parent_agent.as_deref());
         }
     }
     let mut visited = BTreeSet::new();

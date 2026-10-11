@@ -31,7 +31,30 @@ pub(super) trait Executor: Send + Sync {
         timeout: u64,
         progress: &dyn Fn(&str),
     ) -> Result<Output>;
+    fn execute_delegating(
+        &self,
+        request: Execution<'_>,
+        _tools: &dyn Fn(&str, &str, serde_json::Value) -> Result<serde_json::Value>,
+    ) -> Result<Output> {
+        self.execute(
+            request.model,
+            request.prompt,
+            request.cwd,
+            request.cancel,
+            request.timeout,
+            request.progress,
+        )
+    }
 }
+pub(super) struct Execution<'a> {
+    pub model: &'a str,
+    pub prompt: &'a str,
+    pub cwd: &'a Path,
+    pub cancel: &'a AtomicBool,
+    pub timeout: u64,
+    pub progress: &'a dyn Fn(&str),
+}
+type ToolHandler<'a> = &'a dyn Fn(&str, &str, serde_json::Value) -> Result<serde_json::Value>;
 pub(super) struct Pi {
     executable: std::path::PathBuf,
     credentials: std::sync::Mutex<BTreeMap<String, String>>,
@@ -161,6 +184,34 @@ impl Executor for Pi {
         timeout: u64,
         progress: &dyn Fn(&str),
     ) -> Result<Output> {
+        self.run(
+            Execution {
+                model,
+                prompt,
+                cwd,
+                cancel,
+                timeout,
+                progress,
+            },
+            None,
+        )
+    }
+
+    fn execute_delegating(&self, request: Execution<'_>, tools: ToolHandler<'_>) -> Result<Output> {
+        self.run(request, Some(tools))
+    }
+}
+
+impl Pi {
+    fn run(&self, request: Execution<'_>, tools: Option<ToolHandler<'_>>) -> Result<Output> {
+        let Execution {
+            model,
+            prompt,
+            cwd,
+            cancel,
+            timeout,
+            progress,
+        } = request;
         let mut process = Process::new(&self.executable);
         if let Some(provider) = model.split('/').next()
             && let Some(key) = self
@@ -224,7 +275,7 @@ impl Executor for Pi {
         writeln!(
             stdin,
             "{}",
-            serde_json::json!({"id":"prompt","type":"prompt","message":prompt})
+            serde_json::json!({"id":"prompt","type":"prompt","message":prompt,"delegation":tools.is_some()})
         )
         .map_err(|e| e.to_string())?;
         stdin.flush().map_err(|e| e.to_string())?;
@@ -293,6 +344,9 @@ impl Executor for Pi {
                             output.usage = message.get("usage").cloned();
                         }
                         Some("agent_settled") => {
+                            if let Some(usage) = record.get("usage") {
+                                output.usage = Some(usage.clone());
+                            }
                             if let Some(error) = error {
                                 return Err(error);
                             }
@@ -301,8 +355,21 @@ impl Executor for Pi {
                             }
                             return Ok(output);
                         }
-                        Some("tool_execution_start") => {
-                            return Err("Pi 在禁用工具模式下尝试执行工具，运行已终止".into());
+                        Some("tool_request") => {
+                            let handler = tools.ok_or("此运行未开放委派工具")?;
+                            let call_id = record["id"].as_str().ok_or("工具调用缺少 ID")?;
+                            let name = record["name"].as_str().ok_or("工具调用缺少名称")?;
+                            let result = handler(call_id, name, record["arguments"].clone());
+                            let reply = match result {
+                                Ok(value) => {
+                                    serde_json::json!({"type":"tool_result","id":call_id,"value":value})
+                                }
+                                Err(error) => {
+                                    serde_json::json!({"type":"tool_result","id":call_id,"error":error})
+                                }
+                            };
+                            writeln!(stdin, "{reply}").map_err(|e| e.to_string())?;
+                            stdin.flush().map_err(|e| e.to_string())?;
                         }
                         _ => {}
                     }

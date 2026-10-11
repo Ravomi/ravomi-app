@@ -24,6 +24,27 @@ struct Edge {
     label: String,
 }
 
+/// Agent groups show readable content when a delegated canvas answer uses the
+/// same structured knowledge format as a non-delegated answer.
+pub(super) fn summary_text(summary: &str) -> Option<String> {
+    let graph = Network::parse(summary).ok()?;
+    let titles: HashMap<_, _> = graph
+        .nodes
+        .iter()
+        .map(|n| (n.id.as_str(), n.text.as_str()))
+        .collect();
+    let mut paragraphs: Vec<_> = graph.nodes.iter().map(|n| n.text.clone()).collect();
+    paragraphs.extend(graph.edges.iter().map(|e| {
+        format!(
+            "{} → {}：{}",
+            titles[e.from.as_str()],
+            titles[e.to.as_str()],
+            e.label
+        )
+    }));
+    Some(paragraphs.join("\n\n"))
+}
+
 impl Network {
     fn parse(summary: &str) -> Result<Self> {
         let graph: Self =

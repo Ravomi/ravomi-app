@@ -12,6 +12,8 @@
 
 ## 2. 图结构与物理表
 
+动态子 Agent 使用协作归档 schema 2（无委派的旧归档仍为 schema 1），不改变 SQLite 容器版本。每个子 Run 的 `delegation` 保存父 Run ID、创建调用 ID 和固定请求；父 Run 的 `delegatedResults` 按读取顺序追加已收集的固定成果引用。启动时的 `sources` 不随委派改变；归档更新只允许在途 Run 追加成果引用，已结束成果仍不可改写。读取校验父运行、成果归属与引用无环。旧客户端遇到新归档字段会拒绝，不能静默丢失委派证据。当前这些关系保存在 Run 的内容对象中，尚未新增独立 SQL 委派索引；活动运行库仍按 S1–S3 后续迁移。
+
 完整 DDL 是 [src/project_sqlite.sql](src/project_sqlite.sql)。不把整个画布或 ZIP 塞进单个数据库字段。
 
 | 表 | 内容与所有权 |

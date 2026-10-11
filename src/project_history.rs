@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const HISTORY_ENTRY: &str = "collaboration/history.json";
 pub const HISTORY_SCHEMA_VERSION: u32 = 1;
+pub const DELEGATION_HISTORY_SCHEMA_VERSION: u32 = 2;
 const MAX_GRAPH_NODES: usize = 65_536;
 const MAX_GRAPH_EDGES: usize = 262_144;
 
@@ -104,6 +105,10 @@ pub struct ArchivedRun<T = String> {
     pub review: Option<String>,
     pub usage: Option<serde_json::Value>,
     pub retry_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation: Option<collaboration::Delegation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delegated_results: Vec<String>,
 }
 
 impl History {
@@ -133,6 +138,13 @@ impl History {
                 return Err(format!("运行快照包含重复流程 ID：{id}").into());
             }
             history.workflows.push(ArchivedWorkflow::from(workflow));
+        }
+        if history
+            .workflows
+            .iter()
+            .any(|w| w.runs.iter().any(|r| r.delegation.is_some()))
+        {
+            history.schema_version = DELEGATION_HISTORY_SCHEMA_VERSION;
         }
         history.validate()?;
         Ok(history)
@@ -181,6 +193,8 @@ impl<T> History<T> {
                             review: run.review,
                             usage: run.usage,
                             retry_of: run.retry_of,
+                            delegation: run.delegation,
+                            delegated_results: run.delegated_results,
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -203,7 +217,10 @@ impl<T> History<T> {
 
     /// Validate the archive schema and all structural references before use.
     pub fn validate(&self) -> Result<()> {
-        if self.schema_version != HISTORY_SCHEMA_VERSION {
+        if !matches!(
+            self.schema_version,
+            HISTORY_SCHEMA_VERSION | DELEGATION_HISTORY_SCHEMA_VERSION
+        ) {
             return Err(format!("不支持的协作归档版本：{}", self.schema_version).into());
         }
         let mut budget = GraphBudget::default();
@@ -222,6 +239,8 @@ impl<T> History<T> {
                 total
                     .saturating_add(run.sources.len())
                     .saturating_add(usize::from(run.retry_of.is_some()))
+                    .saturating_add(usize::from(run.delegation.is_some()))
+                    .saturating_add(run.delegated_results.len())
             }))?;
             let task_ids: BTreeSet<_> = [&workflow.plan, &workflow.draft_plan]
                 .into_iter()
@@ -231,6 +250,16 @@ impl<T> History<T> {
                 .collect();
             let run_ids: BTreeSet<_> = workflow.runs.iter().map(|run| run.id.as_str()).collect();
             for run in &workflow.runs {
+                if let Some(delegation) = &run.delegation
+                    && (self.schema_version < 2
+                        || delegation.parent_run_id == run.id
+                        || !run_ids.contains(delegation.parent_run_id.as_str())
+                        || delegation.call_id.is_empty()
+                        || delegation.call_id.len() > 256
+                        || delegation.request.len() > 32 * 1024)
+                {
+                    return Err("归档的委派来源或版本无效".into());
+                }
                 if run.id.is_empty() || !global_run_ids.insert(run.id.as_str()) {
                     return Err("协作归档的运行 ID 为空或重复".into());
                 }
@@ -240,12 +269,24 @@ impl<T> History<T> {
                     return Err(format!("运行引用了缺失的任务：{}", run.task_id).into());
                 }
                 let mut sources = BTreeSet::new();
-                for source in &run.sources {
+                for source in run.sources.iter().chain(&run.delegated_results) {
                     if source == &run.id
                         || !run_ids.contains(source.as_str())
                         || !sources.insert(source)
                     {
                         return Err(format!("运行的来源引用无效：{source}").into());
+                    }
+                }
+                for result in &run.delegated_results {
+                    if self.schema_version < 2
+                        || !workflow.runs.iter().any(|r| {
+                            &r.id == result
+                                && r.delegation
+                                    .as_ref()
+                                    .is_some_and(|d| d.parent_run_id == run.id)
+                        })
+                    {
+                        return Err("委派成果不属于本次父运行".into());
                     }
                 }
                 if let Some(previous) = &run.retry_of
@@ -256,10 +297,20 @@ impl<T> History<T> {
             }
             validate_acyclic(
                 workflow.runs.iter().map(|run| run.id.as_str()),
+                workflow.runs.iter().filter_map(|run| {
+                    run.delegation
+                        .as_ref()
+                        .map(|d| (run.id.as_str(), d.parent_run_id.as_str()))
+                }),
+                "代理委派",
+            )?;
+            validate_acyclic(
+                workflow.runs.iter().map(|run| run.id.as_str()),
                 workflow.runs.iter().flat_map(|run| {
                     run.sources
                         .iter()
                         .chain(run.retry_of.iter())
+                        .chain(run.delegated_results.iter())
                         .map(move |source| (run.id.as_str(), source.as_str()))
                 }),
                 "运行来源与重试",
@@ -462,6 +513,8 @@ impl From<&collaboration::Workflow> for ArchivedWorkflow {
                     review: run.review.clone(),
                     usage: run.usage.clone(),
                     retry_of: run.retry_of.clone(),
+                    delegation: run.delegation.clone(),
+                    delegated_results: run.delegated_results.clone(),
                 })
                 .collect(),
         }
@@ -503,6 +556,8 @@ mod tests {
                 usage: None,
                 session_id: Some("private-session-handle".into()),
                 retry_of: None,
+                delegation: None,
+                delegated_results: vec![],
             }],
             paused: false,
             max_calls: 16,
@@ -566,7 +621,7 @@ mod tests {
     #[test]
     fn validation_rejects_unknown_schema_duplicate_ids_and_dangling_references() {
         let unknown: History =
-            serde_json::from_str(r#"{"schemaVersion":2,"workflows":[]}"#).unwrap();
+            serde_json::from_str(r#"{"schemaVersion":3,"workflows":[]}"#).unwrap();
         assert!(unknown.validate().is_err());
         let snapshot = Snapshot {
             workflows: vec![workflow("a")],

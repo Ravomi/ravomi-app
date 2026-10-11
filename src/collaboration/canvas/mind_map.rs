@@ -5,6 +5,7 @@ pub(super) fn eligible(w: &Workflow, binding: &Binding) -> bool {
     w.project.is_empty()
         && binding.agents.is_empty()
         && !w.runs.iter().any(|run| run.task_id == "$skill")
+        && !w.runs.iter().any(|run| run.delegation.is_some())
 }
 
 struct Topic {

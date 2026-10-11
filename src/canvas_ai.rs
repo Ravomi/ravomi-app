@@ -735,6 +735,8 @@ mod tests {
                     usage: None,
                     session_id: None,
                     retry_of: None,
+                    delegation: None,
+                    delegated_results: vec![],
                 }],
                 paused: true,
                 max_calls: 2,

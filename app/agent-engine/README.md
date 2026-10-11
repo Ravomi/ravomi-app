@@ -6,7 +6,7 @@ Ravomi 将 Pi Agent Core 与 Pi AI 1.0.4 的发布源码模块编译进私有原
 
 支持 DeepSeek、OpenAI、Anthropic API Key。优先使用应用当前会话设置，其次读取相应 `*_API_KEY` 环境变量，最后兼容已有 `~/.pi/agent/auth.json` 的 `api_key` 记录。不会加载 Pi 扩展、全局 Skill、MCP、项目配置或历史会话。OAuth、自定义端点与外部会话续聊尚未接入。
 
-当前代码 MVP 使用选定源码与依赖产物生成完整文件提案，Pi 工具列表为空。用户另行启动测试时，由 Rust 在独立临时目录执行指定 argv；目录隔离不是权限沙箱。只有人工通过的版本可以导出到新目录；不自动修改源项目、不安装依赖、不提交代码。
+当前代码 MVP 使用选定源码与依赖产物生成完整文件提案。普通任务开放 `spawn_agent`、`wait_agent`，由 Rust 创建和持久化独立子 Run，子 Agent 沿用模型与固定输入，不再递归委派；规划、Skill 与子 Agent 不开放工具。没有文件或终端工具。用户另行启动测试时，由 Rust 在独立临时目录执行指定 argv；目录隔离不是权限沙箱。只有人工通过的版本可以导出到新目录；不自动修改源项目、不安装依赖、不提交代码。
 
 ## 来源与分发
 
@@ -14,4 +14,6 @@ Ravomi 将 Pi Agent Core 与 Pi AI 1.0.4 的发布源码模块编译进私有原
 - [Bun 1.3.14](https://github.com/oven-sh/bun/tree/bun-v1.3.14)；运行时及其链接组件的声明见 [Bun-LICENSE.md](licenses/Bun-LICENSE.md)，Pi 声明见 [Pi-LICENSE](licenses/Pi-LICENSE)。Bun 的 JavaScriptCore/WebKit 重链接说明按原许可证保留。
 - 构建收集锁文件内生产依赖附带的 LICENSE/NOTICE 与本目录许可证，生成 `THIRD-PARTY-NOTICES.txt`，与 `engine-lock.json` 一并进入 Tauri bundle resources。发布时同时提供本仓库对应源码、锁文件和构建说明；当前尚未验证正式安装包。
 
-私有协议为 stdin/stdout JSONL：`get_state`、`prompt`、`abort`；返回文本增量、最终消息、用量与完成标志。该协议不对外承诺 Pi CLI 兼容性。
+私有协议为 stdin/stdout JSONL：`get_state`、`prompt`、`abort`，以及按调用 ID 对应的 `tool_request` / `tool_result`；返回文本增量、最终消息、跨轮累计用量与完成标志。只有宿主在 prompt 中明确启用 delegation 时才注册委派工具。主 Agent 应先创建独立子任务，再等待并汇总；父运行终止会取消在途子运行并保留证据。该协议不对外承诺 Pi CLI 兼容性。
+
+机制参考 [Pi Subagent](https://github.com/badlogic/pi-subagent)，实现独立编写，不包含该仓库源码，不依赖 tmux。运行中 steer、follow-up、跨模型子任务与递归层级配置尚未实现。活动记录仍沿用 Rust 的本机运行库，明确连接的流程以协作归档 v2 随 `.mio` 保存，打开不会启动子进程。

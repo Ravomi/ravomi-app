@@ -332,6 +332,8 @@ mod tests {
                         review: Some("Historical review only".into()),
                         usage: Some(serde_json::json!({"tokens": 12})),
                         retry_of: None,
+                        delegation: None,
+                        delegated_results: vec![],
                     }],
                 })
                 .collect(),

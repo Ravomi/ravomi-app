@@ -422,6 +422,7 @@ impl Document {
     pub fn attach_history(&mut self, history: History) -> Result<()> {
         history.validate()?;
         let mut next = self.archived_history.clone();
+        next.schema_version = next.schema_version.max(history.schema_version);
         for workflow in history.workflows {
             if let Some(previous) = next
                 .workflows
@@ -440,6 +441,8 @@ impl Document {
                         || old.task_id != fresh.task_id
                         || old.created_at != fresh.created_at
                         || old.retry_of != fresh.retry_of
+                        || old.delegation != fresh.delegation
+                        || !fresh.delegated_results.starts_with(&old.delegated_results)
                     {
                         return Err("同一运行的固定输入发生冲突，未覆盖协作历史".into());
                     }

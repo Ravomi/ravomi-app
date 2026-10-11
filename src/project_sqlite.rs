@@ -376,7 +376,14 @@ fn read_contents(conn: &Connection) -> Result<Loaded> {
     }
     workflows.sort_by_key(|(order, _)| *order);
     let history = History {
-        schema_version: 1,
+        schema_version: if workflows
+            .iter()
+            .any(|(_, w)| w.runs.iter().any(|r| r.delegation.is_some()))
+        {
+            2
+        } else {
+            1
+        },
         workflows: workflows.into_iter().map(|(_, w)| w).collect(),
     };
     // Resolve content hashes only in body fields, retaining identities and order.
@@ -786,6 +793,8 @@ mod tests {
             finished_at: Some(2),
             sources,
             retry_of,
+            delegation: None,
+            delegated_results: vec![],
             prompt: body.into(),
             input_files: vec![],
             output: body.into(),
