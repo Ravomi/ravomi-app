@@ -82,4 +82,4 @@ Linux 可在嵌入生产前端的调试构建后，从仓库根目录运行 `xvf
 
 界面验收同时覆盖 [DESIGN](../DESIGN.md) 与 [AI_UI_RULES](../AI_UI_RULES.md) 的状态、键盘、窄窗口和可读性要求；Agent 接入后增加并行分支、上下文交接和人工介入流程，不把前端模拟 IPC 当成真实 Agent 执行证据。历史验证见 [React/Tauri 入口验收](../validation/react-tauri-bootstrap.md) 和 [同窗口编辑验收](../validation/react-inline-editor.md)。
 
-系统窗口图标暂复用现有打包兼容资源。更新团子猫品牌资源时按 [BRAND](../assets/branding/BRAND.md) 核对资源用途和状态，并单独验收小尺寸识别，不因设计文档更新宣称安装包图标已经替换。
+界面已采用获准风格卡的暖白／石墨主题，默认浅色；含团子猫品牌区、桌面侧栏、胶囊主操作和清晰内容卡片。窄窗口与高 UI 缩放按实际容器宽度重排；减少动态效果偏好关闭 CSS 过渡。系统窗口图标与网页图标引用 [品牌图标导出](../assets/branding/app-icons/README.md)，功能图标复用项目已有 Lucide 资源。Tauri 仍未启用安装包构建，不将资源接通等同于跨平台安装验收。

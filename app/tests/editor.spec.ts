@@ -52,8 +52,9 @@ test('browser preview explicitly disables document operations', async ({ page })
   for (const button of await page.getByRole('button', { name: '新建文字', exact: true }).all()) {
     await expect(button).toBeDisabled();
   }
-  await page.getByRole('button', { name: '切换浅色主题' }).click();
   await expect(page.locator('.app')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: '切换深色主题' }).click();
+  await expect(page.locator('.app')).toHaveAttribute('data-theme', 'dark');
 });
 
 test('saving applies a draft, shows IO errors, and preserves the edited text', async ({ page }) => {
@@ -86,14 +87,36 @@ for (const theme of ['dark', 'light']) {
     test(`layout ${theme} ${scale}%`, async ({ page }, testInfo) => {
       await desktop(page);
       await page.getByRole('button', { name: /原始想法/ }).click();
-      if (theme === 'light') await page.getByRole('button', { name: '切换浅色主题' }).click();
+      if (theme === 'dark') await page.getByRole('button', { name: '切换深色主题' }).click();
       await page.getByLabel('界面缩放').selectOption(scale);
       await expect(page.getByLabel('文字内容')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath('desktop.png'), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      // Page scroll width alone misses controls clipped by a rounded panel.
+      for (const selector of ['.workspace-heading button', '.inspector textarea']) {
+        expect(await page.locator(selector).evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const panel = element.closest('.workspace-heading, .inspector')!.getBoundingClientRect();
+          return bounds.left >= panel.left && bounds.right <= panel.right && bounds.right <= window.innerWidth;
+        })).toBe(true);
+      }
       await page.screenshot({ path: testInfo.outputPath('narrow.png'), fullPage: true });
     });
   }
 }
+
+test('brand assets load and keyboard focus survives a theme change with reduced motion', async ({ page }) => {
+  await desktop(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(page.locator('.hero-avatar')).toBeVisible();
+  expect(await page.locator('.hero-avatar').evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const theme = page.getByRole('button', { name: '切换深色主题' });
+  await theme.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: '切换浅色主题' })).toBeFocused();
+  expect(await page.locator('.window-actions button').first().evaluate((button) => getComputedStyle(button).transitionDuration)).toBe('0s');
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('界面缩放')).toBeFocused();
+});
