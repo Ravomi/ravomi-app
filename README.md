@@ -33,7 +33,7 @@ Ravomi is designed around three qualities:
 - **Connected**: Make tasks, code, and assets reusable modules with clear relationships, dependencies, and context sources.
 - **Controllable**: Change assignments, revise plans, request a stop, or review results while keeping room to work on other independent branches.
 
-> **Current stage: a native canvas with an embedded Pi code collaboration MVP.** Select text/group blocks and press Space to plan and execute bounded code tasks; each planned Agent gets a collapsible canvas node with run records. Select Agent nodes to summarize fixed runs into an editable, project-local Skill. Configure the project and explicit source paths in “Pi · 画布协作”. Image workflows, autonomous dynamic delegation and automatic Skill reuse remain planned. The [React/Tauri entry](app/README.md) is a separate prototype, not the full canvas. See [canvas workflow validation](validation/canvas-ai-workflows.md) for tested scope.
+> **Current stage: a native canvas with an embedded Pi code collaboration MVP.** Select text/group blocks and press Space to plan and execute tasks; each planned Agent gets a collapsible canvas node with run records. Canvas text tasks require no external code folder, and their records are included when saving `.mio`. Configure the model and optional source attachments in “画布协作”. Ready Agents run without a fixed concurrency or task-count cap. Select Agent nodes to summarize fixed runs into an editable, project-local Skill. Image workflows, autonomous dynamic delegation and automatic Skill reuse remain planned. The [React/Tauri entry](app/README.md) is a separate prototype, not the full canvas. See [canvas workflow validation](validation/canvas-ai-workflows.md) for tested scope.
 
 <a id="界面预览"></a>
 
