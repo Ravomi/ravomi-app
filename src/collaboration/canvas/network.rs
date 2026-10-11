@@ -2,13 +2,13 @@
 use super::*;
 use std::collections::HashMap;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Network {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Node {
     id: String,
@@ -16,7 +16,7 @@ struct Node {
     #[serde(default)]
     parent: Option<String>,
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Edge {
     from: String,
@@ -62,27 +62,147 @@ impl Network {
         Ok(graph)
     }
 
+    // Keep the immutable model response intact; normalize only its canvas projection.
+    fn presentation(mut self) -> Self {
+        // Explicit containment is not a second semantic relationship. Avoid guessing
+        // hierarchy from arbitrary verbs such as “causes” or “references”.
+        let mut groups: HashMap<(String, String), String> = HashMap::new();
+        let edges = std::mem::take(&mut self.edges);
+        let mut claims = HashMap::new();
+        for edge in &edges {
+            if matches!(edge.label.as_str(), "包含阶段" | "包含主题") {
+                *claims.entry(edge.to.clone()).or_insert(0) += 1;
+            }
+        }
+        let mut retained = Vec::new();
+        for edge in edges {
+            if edge.label == "直接连接原始问题" {
+                continue; // The application already creates the input connection.
+            }
+            let title = match edge.label.as_str() {
+                "包含阶段" => Some("阶段"),
+                "包含主题" => Some("主题"),
+                _ => None,
+            };
+            let target = self.nodes.iter().position(|n| n.id == edge.to).unwrap();
+            let mut ancestor = Some(edge.from.as_str());
+            let mut would_cycle = false;
+            while let Some(id) = ancestor {
+                would_cycle |= id == edge.to;
+                ancestor = self
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == id)
+                    .and_then(|n| n.parent.as_deref());
+            }
+            if let Some(title) = title
+                && self.nodes[target].parent.is_none()
+                && !would_cycle
+                // Multiple containment claims are ambiguous: retain their explicit edges.
+                && claims.get(&edge.to) == Some(&1)
+            {
+                let group = groups
+                    .entry((edge.from.clone(), title.into()))
+                    .or_insert_with(|| {
+                        let group_id = id();
+                        self.nodes.push(Node {
+                            id: group_id.clone(),
+                            text: title.into(),
+                            parent: Some(edge.from.clone()),
+                        });
+                        group_id
+                    });
+                self.nodes[target].parent = Some(group.clone());
+            } else {
+                retained.push(edge);
+            }
+        }
+        self.edges = retained;
+        // Long prose belongs in a text node, never in a one-line group heading.
+        let parents: HashSet<_> = self.nodes.iter().filter_map(|n| n.parent.clone()).collect();
+        let mut bodies = Vec::new();
+        for node in &mut self.nodes {
+            if parents.contains(&node.id) && node.text.chars().count() > 20 {
+                let text = std::mem::replace(&mut node.text, "概览".into());
+                bodies.push(Node {
+                    id: id(),
+                    text,
+                    parent: Some(node.id.clone()),
+                });
+            }
+        }
+        // Body nodes are inserted first, so the overview is read before its details.
+        bodies.extend(self.nodes);
+        self.nodes = bodies;
+        let roots = self.children(None);
+        if roots.len() > 4 {
+            let id = id();
+            for &i in roots.iter().skip(1) {
+                self.nodes[i].parent = Some(id.clone());
+            }
+            self.nodes.push(Node {
+                id,
+                text: "相关要点".into(),
+                parent: None,
+            });
+        }
+        self
+    }
+
     fn children(&self, parent: Option<&str>) -> Vec<usize> {
-        self.nodes
+        let mut children: Vec<_> = self
+            .nodes
             .iter()
             .enumerate()
             .filter_map(|(i, n)| (n.parent.as_deref() == parent).then_some(i))
-            .collect()
+            .collect();
+        if parent.is_some_and(|id| {
+            self.nodes
+                .iter()
+                .any(|n| n.id == id && n.text == "相关要点")
+        }) {
+            // Keep fallback details in the order of their connected content, rather
+            // than letting the model's flat list create avoidable crossings.
+            children.sort_by_key(|&i| {
+                self.edges
+                    .iter()
+                    .filter_map(|e| {
+                        let other = if e.to == self.nodes[i].id {
+                            &e.from
+                        } else if e.from == self.nodes[i].id {
+                            &e.to
+                        } else {
+                            return None;
+                        };
+                        self.nodes.iter().position(|n| &n.id == other)
+                    })
+                    .min()
+                    .unwrap_or(usize::MAX)
+            });
+        }
+        children
+    }
+
+    fn root(&self, mut index: usize) -> usize {
+        while let Some(parent) = &self.nodes[index].parent {
+            index = self.nodes.iter().position(|n| &n.id == parent).unwrap();
+        }
+        index
     }
 
     fn size(&self, i: usize) -> [f32; 2] {
         let children = self.children(Some(&self.nodes[i].id));
         if children.is_empty() {
             return [
-                280.0,
-                (self.nodes[i].text.chars().count().max(1).div_ceil(14) as f32 * 28.0 + 20.0)
+                360.0,
+                (self.nodes[i].text.chars().count().max(1).div_ceil(18) as f32 * 28.0 + 24.0)
                     .max(64.0),
             ];
         }
         let sizes: Vec<_> = children.iter().map(|&c| self.size(c)).collect();
         [
-            sizes.iter().map(|s| s[0]).fold(280.0, f32::max) + 64.0,
-            sizes.iter().map(|s| s[1] + 32.0).sum::<f32>() + 64.0,
+            sizes.iter().map(|s| s[0]).fold(360.0, f32::max) + 160.0,
+            sizes.iter().map(|s| s[1] + 100.0).sum::<f32>() + 48.0,
         ]
     }
 
@@ -99,11 +219,11 @@ impl Network {
             doc.create_text_node([at[0] + size[0] * 0.5, at[1] + size[1] * 0.5])
                 .map_err(|e| e.to_string())?
         } else {
-            let mut y = at[1] + 64.0;
+            let mut y = at[1] + 80.0;
             let mut members = HashSet::new();
             for child in children {
-                members.insert(self.create(doc, child, [at[0] + 32.0, y], indices)?);
-                y += self.size(child)[1] + 32.0;
+                members.insert(self.create(doc, child, [at[0] + 80.0, y], indices)?);
+                y += self.size(child)[1] + 100.0;
             }
             doc.create_group(&members).map_err(|e| e.to_string())?
         };
@@ -123,7 +243,9 @@ pub(super) fn project(
     run: &str,
     summary: &str,
 ) -> Result<()> {
-    let graph = Network::parse(summary)?;
+    let graph = Network::parse(summary)?.presentation();
+    // Generated grouping must satisfy the same depth/count/reference contract.
+    let graph = Network::parse(&serde_json::to_string(&graph).map_err(|e| e.to_string())?)?;
     let sources: Vec<_> = binding
         .input_ids
         .iter()
@@ -150,7 +272,7 @@ pub(super) fn project(
             graph.create(
                 doc,
                 i,
-                [binding.anchor[0] + column as f32 * (width + 180.0), y],
+                [binding.anchor[0] + column as f32 * (width + 340.0), y],
                 &mut indices,
             )?;
         }
@@ -167,11 +289,12 @@ pub(super) fn project(
             .edges
             .iter()
             .any(|e| e.from == edge.to && e.to == edge.from);
-        let rates = if reciprocal && dx.abs() < dy.abs() {
+        let cross_group = graph.root(from) != graph.root(to);
+        let rates = if reciprocal && dx.abs() < dy.abs() && !cross_group {
             // Put the two directions on opposite sides instead of overlapping labels.
             let side = if dy > 0.0 { 1.0 } else { 0.0 };
             vec![[side, 0.5], [side, 0.5]]
-        } else if dx.abs() >= dy.abs() {
+        } else if cross_group || dx.abs() >= dy.abs() {
             let side = if dx >= 0.0 { 1.0 } else { 0.0 };
             vec![[side, 0.5], [1.0 - side, 0.5]]
         } else {
@@ -182,13 +305,17 @@ pub(super) fn project(
             id: id(),
             members: vec![indices[from], indices[to]],
             rates,
-            text: edge.label.clone(),
+            text: if edge.label == "时间顺序过渡" {
+                String::new()
+            } else {
+                edge.label.clone()
+            },
             ..Default::default()
         })
         .map_err(|e| e.to_string())?;
     }
     for &source in &sources {
-        for &root in &roots {
+        for &root in roots.iter().take(1) {
             doc.add_edge(crate::GraphEdge {
                 id: id(),
                 members: vec![source, indices[root]],
@@ -209,6 +336,64 @@ pub(super) fn project(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dense_history_answer_uses_containment_and_a_single_input_edge() {
+        let summary = include_str!("../../../validation/fixtures/us-history-network.json");
+        let original = Network::parse(summary).unwrap();
+        let normalized = Network::parse(summary).unwrap().presentation();
+        assert!(normalized.children(None).len() <= 4);
+        assert!(
+            !normalized
+                .edges
+                .iter()
+                .any(|e| matches!(e.label.as_str(), "包含阶段" | "直接连接原始问题"))
+        );
+        for node in &original.nodes {
+            assert!(normalized.nodes.iter().any(|n| n.text == node.text));
+        }
+        let mut doc = Document::blank().unwrap();
+        let input = doc.create_text_node([0.0, 0.0]).unwrap();
+        doc.graph.nodes[input].text = "讲解美国历史".into();
+        let mut binding = Binding {
+            workflow_id: "history".into(),
+            input_ids: vec![doc.nodes[input].id.clone()],
+            anchor: [360.0, 0.0],
+            agents: vec![],
+            answer_maps: vec![],
+        };
+        project(&mut doc, &mut binding, "run", summary).unwrap();
+        assert_eq!(
+            doc.edges.iter().filter(|e| e.members[0] == input).count(),
+            1
+        );
+        assert!(
+            doc.nodes
+                .iter()
+                .filter(|n| !n.children.is_empty())
+                .all(|n| n.text.chars().count() <= 20)
+        );
+        let leaves: Vec<_> = doc.nodes.iter().filter(|n| n.children.is_empty()).collect();
+        for (i, a) in leaves.iter().enumerate() {
+            for b in &leaves[i + 1..] {
+                assert!(
+                    a.rect[0] + a.rect[2] <= b.rect[0]
+                        || b.rect[0] + b.rect[2] <= a.rect[0]
+                        || a.rect[1] + a.rect[3] <= b.rect[1]
+                        || b.rect[1] + b.rect[3] <= a.rect[1]
+                );
+            }
+        }
+        if let Some(path) = std::env::var_os("RAVOMI_HISTORY_LAYOUT_FIXTURE") {
+            doc.save(std::path::Path::new(&path)).unwrap();
+        }
+    }
+
+    #[test]
+    fn containment_normalization_does_not_create_cycles() {
+        let graph = Network::parse(r#"{"nodes":[{"id":"a","text":"A"},{"id":"b","text":"B"}],"edges":[{"from":"a","to":"b","label":"包含阶段"},{"from":"b","to":"a","label":"包含阶段"}]}"#).unwrap().presentation();
+        assert!(Network::parse(&serde_json::to_string(&graph).unwrap()).is_ok());
+        assert_eq!(graph.edges.len(), 1);
+    }
     const EXAMPLE: &str = r#"{"nodes":[
         {"id":"concepts","text":"核心概念"},
         {"id":"history","text":"历史与引用","parent":"concepts"},
@@ -234,7 +419,7 @@ mod tests {
         };
         project(&mut doc, &mut binding, "run", EXAMPLE).unwrap();
         assert_eq!(doc.nodes.len(), 7);
-        assert_eq!(doc.edges.len(), 5);
+        assert_eq!(doc.edges.len(), 4);
         let by_text = |text: &str| doc.nodes.iter().position(|n| n.text == text).unwrap();
         let concepts = by_text("核心概念");
         let history = by_text("历史与引用");

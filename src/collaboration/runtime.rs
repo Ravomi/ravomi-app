@@ -798,8 +798,15 @@ fn task_prompt(
         ""
     };
     let instruction = format!(
-        "{}\n{}\n{}",
-        task.instruction, merge_instruction, canvas_instruction
+        "{}\n{}\n{}\n{}",
+        task.instruction,
+        merge_instruction,
+        canvas_instruction,
+        if w.project.is_empty() {
+            "可读性规则：顶层只保留 1 至 3 个主题分组，各组标题不超过 12 个汉字，完整句子放在组内正文节点。阶段、主题、例子、补充说明必须用 parent 收入对应分组，不得全设 parent:null。一个组超过 6 个直接成员时继续按内容分组。时间脉络在一个阶段组内顺序排列，只连接相邻阶段；跨组只保留回答问题必需的因果、对照或引用关系，每节点通常不超过 2 条出边，不凑连线。禁止用包含阶段、包含主题、举例等连线重复表达已有归属。不要创建美国历史概览之类的重复入口，也不要生成直接连接原始问题这种界面操作关系。不要额外添加无关的事实/推测声明节点。"
+        } else {
+            ""
+        }
     );
     let handoffs: Vec<_> = sources.iter().map(|id| {
         let r = w.runs.iter().find(|r| &r.id == id).ok_or("缺少交接运行")?;
