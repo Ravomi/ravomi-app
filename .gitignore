@@ -1,0 +1,15 @@
+/target
+/results/
+/fixtures/
+/.env
+/.env.*
+/.DS_Store
+/.ruff_cache/
+__pycache__/
+/app/node_modules/
+/app/dist/
+/app/dist-editor/
+/app/src-tauri/gen/
+/app/test-results/
+/app/playwright-report/
+

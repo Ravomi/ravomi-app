@@ -1,0 +1,107 @@
+{
+  "renderer": "Installed Project Graph 4.2.4 / CEF / Canvas2D",
+  "timing": "requestAnimationFrame interval; browser refresh limited, not GPU time",
+  "nodes": 636,
+  "edges": 391,
+  "moving_nodes": 549,
+  "window_css": [
+    731,
+    457
+  ],
+  "dpr": 1.75,
+  "canvas_pixels": [
+    1277,
+    700
+  ],
+  "home": {
+    "x": 737.6444506835942,
+    "y": -169.66500000000087,
+    "scale": 0.031
+  },
+  "phases": [
+    {
+      "phase": "idle",
+      "unfocused_frames": 0,
+      "raf": {
+        "samples": 474,
+        "mean_ms": 8.455907172995778,
+        "p95_ms": 11.900000000001455,
+        "p99_ms": 14.30000000000291
+      },
+      "samples": 239,
+      "mean_ms": 16.700836820083683,
+      "p95_ms": 23.900000005960464,
+      "p99_ms": 26.700000017881393,
+      "fps": 59.87723913315796,
+      "renderer_cpu_ms": {
+        "samples": 240,
+        "mean_ms": 6.344166666269302,
+        "p95_ms": 9.199999988079071,
+        "p99_ms": 11.800000011920929
+      }
+    },
+    {
+      "phase": "pan",
+      "unfocused_frames": 0,
+      "raf": {
+        "samples": 475,
+        "mean_ms": 8.42,
+        "p95_ms": 11.19999999999709,
+        "p99_ms": 16.60000000000582
+      },
+      "samples": 240,
+      "mean_ms": 16.666250000024835,
+      "p95_ms": 23.099999994039536,
+      "p99_ms": 25.5,
+      "fps": 60.001500037411525,
+      "renderer_cpu_ms": {
+        "samples": 241,
+        "mean_ms": 6.342738589557869,
+        "p95_ms": 9.599999994039536,
+        "p99_ms": 12.700000017881393
+      }
+    },
+    {
+      "phase": "zoom",
+      "unfocused_frames": 0,
+      "raf": {
+        "samples": 444,
+        "mean_ms": 9.032657657657658,
+        "p95_ms": 15.5,
+        "p99_ms": 17.5
+      },
+      "samples": 240,
+      "mean_ms": 16.67541666664183,
+      "p95_ms": 21.80000001192093,
+      "p99_ms": 25.5,
+      "fps": 59.968516528911685,
+      "renderer_cpu_ms": {
+        "samples": 241,
+        "mean_ms": 5.572199167552331,
+        "p95_ms": 7.300000011920929,
+        "p99_ms": 10.400000005960464
+      }
+    },
+    {
+      "phase": "drag_all",
+      "unfocused_frames": 0,
+      "raf": {
+        "samples": 159,
+        "mean_ms": 25.183018867924567,
+        "p95_ms": 38.60000000000582,
+        "p99_ms": 44.20000000001164
+      },
+      "samples": 240,
+      "mean_ms": 16.716250000024836,
+      "p95_ms": 23.19999998807907,
+      "p99_ms": 25.5,
+      "fps": 59.82202946226063,
+      "renderer_cpu_ms": {
+        "samples": 241,
+        "mean_ms": 4.6701244819461065,
+        "p95_ms": 5.5,
+        "p99_ms": 6.399999976158142
+      }
+    }
+  ]
+}

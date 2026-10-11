@@ -1,0 +1,25 @@
+   Compiling project-graph-bevy-canvas v0.1.0 (/home/waya/Projects/Arcraven/Graplu)
+    Finished `release` profile [optimized] target(s) in 20.56s
+     Running unittests src/lib.rs (target/release/deps/project_graph_bevy_canvas-7c2862d79bbbcc76)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 63 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/project_graph_bevy_canvas-665f30135fecaf2d)
+
+running 1 test
+
+thread 'viewer::section_overview::tests::tutorial_titles_fit_the_atlas_at_fractional_and_high_dpi' (326304) panicked at src/section_overview.rs:215:17:
+DPI 1.5, frame 0: atlas fill 0.9707031
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test viewer::section_overview::tests::tutorial_titles_fit_the_atlas_at_fractional_and_high_dpi ... FAILED
+
+failures:
+
+failures:
+    viewer::section_overview::tests::tutorial_titles_fit_the_atlas_at_fractional_and_high_dpi
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.12s
+
+error: test failed, to rerun pass `--bin project-graph-bevy-canvas`

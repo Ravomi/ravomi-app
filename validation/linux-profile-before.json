@@ -1,0 +1,234 @@
+{
+  "attachments": 0,
+  "continuous_redraw": true,
+  "counts": {
+    "TextNode": 5000
+  },
+  "diagnostics": true,
+  "edges": 4929,
+  "editing": null,
+  "environment": {
+    "actual_present_mode": null,
+    "adapter": {
+      "backend": "Vulkan",
+      "device_type": "IntegratedGpu",
+      "driver": "Intel open-source Mesa driver",
+      "driver_info": "Mesa 26.2.3",
+      "name": "Intel(R) Iris(R) Xe Graphics (RPL-P)"
+    },
+    "base_scale_factor": 1.0,
+    "effective_scale_factor": 1.0,
+    "focused": false,
+    "logical_size": [
+      1279.0,
+      799.0
+    ],
+    "physical_size": [
+      1279,
+      799
+    ],
+    "requested_present_mode": "AutoNoVsync",
+    "scale_factor_override": 1.0,
+    "window_backend": "X11"
+  },
+  "nodes": 5000,
+  "phases": [
+    {
+      "app_schedule_ms": {
+        "mean_ms": 23.39070753043478,
+        "p95_ms": 31.218035,
+        "p99_ms": 36.608363999999995,
+        "steps": 115
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 28.323122566901226,
+      "frames": 114,
+      "max_active": 0,
+      "mean_ms": 35.306841526315786,
+      "p95_ms": 44.479954,
+      "p99_ms": 46.220221,
+      "phase": "idle",
+      "physics_steps": null,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.039905199999999995,
+          "p95_ms": 0.06316,
+          "p99_ms": 0.06752000000000001,
+          "steps": 115
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 1.1368482512304223,
+          "p95_ms": 1.4521353812141418,
+          "p99_ms": 1.519583296234131,
+          "steps": 115
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.014201313043478261,
+          "p95_ms": 0.033573,
+          "p99_ms": 0.050365,
+          "steps": 115
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.093749544812642,
+          "p95_ms": 0.14791666305541992,
+          "p99_ms": 0.16666666259765625,
+          "steps": 115
+        }
+      },
+      "rss_kib": 420140,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": {
+        "mean_ms": 21.050830462184877,
+        "p95_ms": 26.563015,
+        "p99_ms": 28.913121,
+        "steps": 119
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 29.806832329520724,
+      "frames": 119,
+      "max_active": 0,
+      "mean_ms": 33.54935502521007,
+      "p95_ms": 41.603518,
+      "p99_ms": 51.693608000000005,
+      "phase": "pan",
+      "physics_steps": null,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.03579482352941176,
+          "p95_ms": 0.059664,
+          "p99_ms": 0.070212,
+          "steps": 119
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 1.2791784526636139,
+          "p95_ms": 1.5294791293258667,
+          "p99_ms": 1.6554166262512207,
+          "steps": 119
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.013295310924369749,
+          "p95_ms": 0.024526,
+          "p99_ms": 0.037526,
+          "steps": 119
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.11061230472247342,
+          "p95_ms": 0.13890624660873413,
+          "p99_ms": 0.1669270792579651,
+          "steps": 119
+        }
+      },
+      "rss_kib": 422428,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": {
+        "mean_ms": 22.099248207207207,
+        "p95_ms": 32.835386,
+        "p99_ms": 37.171324999999996,
+        "steps": 111
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 27.685922862627567,
+      "frames": 111,
+      "max_active": 0,
+      "mean_ms": 36.11943892792793,
+      "p95_ms": 74.938795,
+      "p99_ms": 96.609279,
+      "phase": "zoom",
+      "physics_steps": null,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.03687799099099099,
+          "p95_ms": 0.067171,
+          "p99_ms": 0.083112,
+          "steps": 111
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 1.2597348603858944,
+          "p95_ms": 1.7703645401115418,
+          "p99_ms": 1.8076562058677674,
+          "steps": 111
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.013439261261261265,
+          "p95_ms": 0.029498,
+          "p99_ms": 0.042613,
+          "steps": 111
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.10361251623916634,
+          "p95_ms": 0.1411979132194519,
+          "p99_ms": 0.16734374591445922,
+          "steps": 111
+        }
+      },
+      "rss_kib": 423936,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": {
+        "mean_ms": 29.01487095454546,
+        "p95_ms": 36.024465,
+        "p99_ms": 40.304202999999994,
+        "steps": 110
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 27.560186769563025,
+      "frames": 110,
+      "max_active": 0,
+      "mean_ms": 36.28422435454545,
+      "p95_ms": 43.648846,
+      "p99_ms": 58.751197,
+      "phase": "drag_all",
+      "physics_steps": null,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.04649962727272725,
+          "p95_ms": 0.086015,
+          "p99_ms": 0.106878,
+          "steps": 110
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 1.8989663362142737,
+          "p95_ms": 2.238177028690338,
+          "p99_ms": 2.372031192089081,
+          "steps": 110
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.014137600000000005,
+          "p95_ms": 0.025789,
+          "p99_ms": 0.035469999999999995,
+          "steps": 110
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.11588115247390053,
+          "p95_ms": 0.16005207942581176,
+          "p99_ms": 0.16718749591827392,
+          "steps": 110
+        }
+      },
+      "rss_kib": 428704,
+      "sleeping": 0,
+      "text_layouts": 0
+    }
+  ],
+  "physics": false,
+  "renderer": "Bevy 0.19.1 / wgpu 29.0.4",
+  "timing": "wall-clock frame interval, not GPU time or input latency",
+  "ui": true,
+  "ui_scale": 1.0,
+  "window": [
+    1279,
+    799
+  ]
+}

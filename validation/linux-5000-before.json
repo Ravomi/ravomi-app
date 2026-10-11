@@ -1,0 +1,79 @@
+{
+  "attachments": 0,
+  "counts": {
+    "TextNode": 5000
+  },
+  "edges": 4929,
+  "editing": null,
+  "nodes": 5000,
+  "phases": [
+    {
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 32.923322162736625,
+      "frames": 131,
+      "max_active": 0,
+      "mean_ms": 30.37360552671756,
+      "p95_ms": 37.023793,
+      "p99_ms": 42.012122,
+      "phase": "idle",
+      "physics_steps": null,
+      "rss_kib": 419948,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 31.95678886097868,
+      "frames": 128,
+      "max_active": 0,
+      "mean_ms": 31.292255437500014,
+      "p95_ms": 40.529515,
+      "p99_ms": 43.901675000000004,
+      "phase": "pan",
+      "physics_steps": null,
+      "rss_kib": 420980,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 26.925026630608944,
+      "frames": 108,
+      "max_active": 0,
+      "mean_ms": 37.14016753703704,
+      "p95_ms": 89.227716,
+      "p99_ms": 106.353327,
+      "phase": "zoom",
+      "physics_steps": null,
+      "rss_kib": 422016,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 30.00968685683019,
+      "frames": 120,
+      "max_active": 0,
+      "mean_ms": 33.32257363333335,
+      "p95_ms": 40.134297,
+      "p99_ms": 41.474759999999996,
+      "phase": "drag_all",
+      "physics_steps": null,
+      "rss_kib": 427560,
+      "sleeping": 0,
+      "text_layouts": 0
+    }
+  ],
+  "physics": false,
+  "renderer": "Bevy 0.19.1 / wgpu",
+  "ui": true,
+  "vsync": false,
+  "window": [
+    1279,
+    799
+  ]
+}

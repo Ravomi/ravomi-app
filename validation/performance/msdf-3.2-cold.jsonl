@@ -1,0 +1,10 @@
+{"unique_characters":633,"glyphs":632,"missing_characters":["U+1F3C3"],"texels_per_em":64,"pixel_range":8}
+{"threads":1,"trial":1,"milliseconds":4805.680838,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":1,"trial":2,"milliseconds":5449.063163,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":1,"trial":3,"milliseconds":5095.501723,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":4,"trial":1,"milliseconds":1384.661285,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":4,"trial":2,"milliseconds":1393.234351,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":4,"trial":3,"milliseconds":1408.305718,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":8,"trial":1,"milliseconds":837.560039,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":8,"trial":2,"milliseconds":857.634663,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}
+{"threads":8,"trial":3,"milliseconds":896.4583379999999,"rgba_bytes":10994072,"checksum":"740fbffba5ef8f69"}

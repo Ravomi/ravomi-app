@@ -1,0 +1,42 @@
+{
+  "renderer": "Chrome Canvas2D equivalent scene (not full app)",
+  "window": [
+    1279,
+    799
+  ],
+  "vsync": false,
+  "nodes": 393,
+  "edges": 230,
+  "phases": [
+    {
+      "phase": "idle",
+      "frames": 467,
+      "mean_ms": 8.558244111349039,
+      "p95_ms": 10.899999999999636,
+      "fps": 116.8463982785798
+    },
+    {
+      "phase": "pan",
+      "frames": 470,
+      "mean_ms": 8.522127659574467,
+      "p95_ms": 11.899999999999636,
+      "fps": 117.3415888550457
+    },
+    {
+      "phase": "zoom",
+      "frames": 116,
+      "mean_ms": 34.485344827586204,
+      "p95_ms": 57.400000000001455,
+      "fps": 28.99782516311277
+    },
+    {
+      "phase": "drag_all",
+      "frames": 515,
+      "mean_ms": 7.769708737864081,
+      "p95_ms": 39.599999999998545,
+      "fps": 128.70495326635674
+    }
+  ],
+  "browser": "Chrome/154.0.8037.97",
+  "webgl_renderer": "ANGLE (Intel, Mesa Intel(R) Iris(R) Xe Graphics (RPL-P), OpenGL ES 3.2)"
+}

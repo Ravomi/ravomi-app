@@ -1,0 +1,10 @@
+Ravomi · Apple Silicon
+
+适用于 Apple Silicon Mac（包括 M5），macOS 13 或更新版本。
+将 Ravomi.app 拖入 Applications 文件夹，再从“应用程序”打开。
+
+此包使用本地 ad-hoc 签名，未经过 Apple 开发者签名与公证。
+如 macOS 阻止打开，请在“系统设置 → 隐私与安全性”中确认来源后选择“仍要打开”。
+
+许可证：GPL-3.0-only
+源代码与社区：https://github.com/Wang-Yang-source/H-M

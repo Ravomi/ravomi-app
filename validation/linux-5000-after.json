@@ -1,0 +1,114 @@
+{
+  "attachments": 0,
+  "continuous_redraw": true,
+  "counts": {
+    "TextNode": 5000
+  },
+  "diagnostics": false,
+  "edges": 4929,
+  "editing": null,
+  "environment": {
+    "actual_present_mode": null,
+    "adapter": {
+      "backend": "Vulkan",
+      "device_type": "IntegratedGpu",
+      "driver": "Intel open-source Mesa driver",
+      "driver_info": "Mesa 26.2.3",
+      "name": "Intel(R) Iris(R) Xe Graphics (RPL-P)"
+    },
+    "base_scale_factor": 1.0,
+    "effective_scale_factor": 1.0,
+    "focused": false,
+    "logical_size": [
+      1279.0,
+      799.0
+    ],
+    "physical_size": [
+      1279,
+      799
+    ],
+    "requested_present_mode": "AutoNoVsync",
+    "scale_factor_override": 1.0,
+    "window_backend": "X11"
+  },
+  "nodes": 5000,
+  "phases": [
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 34.96519251798287,
+      "frames": 140,
+      "max_active": 0,
+      "mean_ms": 28.599871128571426,
+      "p95_ms": 36.109555,
+      "p99_ms": 37.756348,
+      "phase": "idle",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 410352,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 38.669196904152884,
+      "frames": 155,
+      "max_active": 0,
+      "mean_ms": 25.860376735483868,
+      "p95_ms": 30.336478,
+      "p99_ms": 35.425628,
+      "phase": "pan",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 411604,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 32.716130281348555,
+      "frames": 130,
+      "max_active": 0,
+      "mean_ms": 30.565962153846154,
+      "p95_ms": 51.618597,
+      "p99_ms": 76.803647,
+      "phase": "zoom",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 412608,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 36.74328504735216,
+      "frames": 148,
+      "max_active": 0,
+      "mean_ms": 27.215857229729743,
+      "p95_ms": 44.240324,
+      "p99_ms": 58.216922999999994,
+      "phase": "drag_all",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 417072,
+      "sleeping": 0,
+      "text_layouts": 0
+    }
+  ],
+  "physics": false,
+  "renderer": "Bevy 0.19.1 / wgpu 29.0.4",
+  "timing": "wall-clock frame interval, not GPU time or input latency",
+  "ui": true,
+  "ui_scale": 1.0,
+  "window": [
+    1279,
+    799
+  ]
+}

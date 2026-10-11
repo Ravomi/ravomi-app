@@ -1,0 +1,48 @@
+{
+  "attachments": 14,
+  "counts": {
+    "ConnectPoint": 21,
+    "LineEdge": 227,
+    "MultiTargetUndirectedEdge": 3,
+    "Section": 27,
+    "TextNode": 345
+  },
+  "edges": 230,
+  "nodes": 393,
+  "phases": [
+    {
+      "fps": 141.46553683787678,
+      "frames": 566,
+      "mean_ms": 7.068859471731453,
+      "p95_ms": 8.176715,
+      "phase": "idle"
+    },
+    {
+      "fps": 141.31672693212295,
+      "frames": 565,
+      "mean_ms": 7.076303150442471,
+      "p95_ms": 8.526473999999999,
+      "phase": "pan"
+    },
+    {
+      "fps": 149.48455458313995,
+      "frames": 598,
+      "mean_ms": 6.689654344481607,
+      "p95_ms": 8.121715,
+      "phase": "zoom"
+    },
+    {
+      "fps": 150.89300756532953,
+      "frames": 603,
+      "mean_ms": 6.6272123283582065,
+      "p95_ms": 7.82992,
+      "phase": "drag_all"
+    }
+  ],
+  "renderer": "Bevy 0.19.1 / wgpu",
+  "vsync": false,
+  "window": [
+    1279,
+    799
+  ]
+}

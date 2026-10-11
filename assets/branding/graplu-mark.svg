@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Graplu — connected canvases</title>
+  <desc id="desc">Four lavender and blue rounded canvases joined by matching solid-color connections in Catppuccin Mocha, on a transparent background.</desc>
+  <defs>
+    <path id="canvas-shape" d="M57 0C80.75 0 90.25 4.75 99.75 14.25S114 33.25 114 57S109.25 90.25 99.75 99.75S80.75 114 57 114S23.75 109.25 14.25 99.75S0 80.75 0 57S4.75 23.75 14.25 14.25S33.25 0 57 0Z"/>
+  </defs>
+  <g id="connections" stroke-width="16" stroke-linecap="round">
+    <path d="M209 336C264 336 248 176 303 176" stroke="#89B4FA"/>
+    <path d="M209 176C264 176 248 336 303 336" stroke="#B4BEFE"/>
+  </g>
+  <g id="canvas-backgrounds" fill="#1E1E2E">
+    <use href="#canvas-shape" x="95" y="119"/>
+    <use href="#canvas-shape" x="303" y="119"/>
+    <use href="#canvas-shape" x="95" y="279"/>
+    <use href="#canvas-shape" x="303" y="279"/>
+  </g>
+  <g id="canvases" stroke-width="16" fill-opacity="0.16">
+    <use href="#canvas-shape" x="95" y="119" fill="#B4BEFE" stroke="#B4BEFE"/>
+    <use href="#canvas-shape" x="303" y="119" fill="#89B4FA" stroke="#89B4FA"/>
+    <use href="#canvas-shape" x="95" y="279" fill="#89B4FA" stroke="#89B4FA"/>
+    <use href="#canvas-shape" x="303" y="279" fill="#B4BEFE" stroke="#B4BEFE"/>
+  </g>
+</svg>

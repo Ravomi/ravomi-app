@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Project Graph · Canvas2D comparison</title>
+<style>body{margin:0;background:#0e1117}canvas{display:block}</style>
+<canvas width="1280" height="800"></canvas>
+<script type="module">
+const graph = await (await fetch('/scene.json')).json();
+const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+const params=new URLSearchParams(location.search);
+const width=Number(params.get('width'))||1280,height=Number(params.get('height'))||800;
+canvas.width=width;canvas.height=height;
+const [x,y,w,h] = graph.bounds;
+const home = [x+w/2,y+h/2], homeScale=Math.max(w/1150,h/670,.01);
+let camera=[...home], scale=homeScale, selected=false;
+function rgba(c, fallback){return c[3] ? `rgba(${c[0]*255},${c[1]*255},${c[2]*255},${c[3]})`:fallback;}
+// Wrap once at world font size. Both renderers retain text layout during camera motion.
+function wrap(text, width, fontSize){
+  ctx.font=`${fontSize}px "Noto Sans CJK SC"`;
+  return text.split('\n').flatMap(paragraph=>{
+    const lines=[];let line='';
+    for(const c of paragraph){if(line && ctx.measureText(line+c).width>width){lines.push(line);line='';}line+=c;}
+    lines.push(line);return lines;
+  });
+}
+const layouts=graph.nodes.map(n=>wrap(n.text,Math.max(n.rect[2]-20,1),n.kind==='Section'?30:n.font_size));
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#0e1117';ctx.fillRect(0,0,width,height);
+  ctx.setTransform(1/scale,0,0,1/scale,width/2-camera[0]/scale,height/2-camera[1]/scale);
+  function node(n,i){
+    const [x,y,w,h]=n.rect;
+    if(x+w<camera[0]-width/2*scale||x>camera[0]+width/2*scale||y+h<camera[1]-height/2*scale||y>camera[1]+height/2*scale)return;
+    ctx.fillStyle=rgba(n.color,n.kind==='Section'?'rgba(31,41,56,.3)':'#1a1f29');ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle='#596e87';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle='#e6edf9';ctx.textAlign='center';ctx.textBaseline='top';
+    const size=n.kind==='Section'?30:n.font_size;ctx.font=`${size}px "Noto Sans CJK SC"`;
+    layouts[i].forEach((line,j)=>ctx.fillText(line,x+w/2,y+(n.kind==='Section'?8:14)+j*size*1.2));
+    if(selected&&n.kind!=='Section'){ctx.strokeStyle='#33ccff';ctx.strokeRect(x-3,y-3,w+6,h+6);}
+  }
+  graph.nodes.forEach((n,i)=>{if(n.kind==='Section')node(n,i);});
+  for(const e of graph.edges){
+    ctx.beginPath();ctx.strokeStyle=rgba(e.color,'#80a6cc');ctx.lineWidth=2;
+    const points=e.members.map((m,i)=>{const r=graph.nodes[m].rect;return [r[0]+r[2]*e.rates[i][0],r[1]+r[3]*e.rates[i][1]];});
+    ctx.moveTo(...points[0]);points.slice(1).forEach(p=>ctx.lineTo(...p));if(points.length>2)ctx.closePath();ctx.stroke();
+    if(e.text){ctx.font='24px "Noto Sans CJK SC"';ctx.fillStyle='#ccd9f2';ctx.fillText(e.text,(points[0][0]+points[1][0])/2,(points[0][1]+points[1][1])/2);}
+  }
+  graph.nodes.forEach((n,i)=>{if(n.kind!=='Section')node(n,i);});
+}
+await document.fonts.ready;
+window.runBenchmark=async()=>{
+  const phases=[];const start=performance.now();let previous=start, phase=0,samples=[];
+  return new Promise(resolve=>{
+    function frame(now){
+      const elapsed=(now-start)/1000;
+      if(elapsed<4){draw();previous=now;requestAnimationFrame(frame);return;}
+      const next=Math.min(4,Math.floor((elapsed-4)/4));
+      if(next!==phase){
+        const sorted=samples.toSorted((a,b)=>a-b),mean=samples.reduce((a,b)=>a+b,0)/samples.length;
+        phases.push({phase:['idle','pan','zoom','drag_all'][phase],frames:samples.length,mean_ms:mean,p95_ms:sorted[Math.floor(sorted.length*.95)],fps:1000/mean});
+        samples=[];phase=next;
+        if(phase===4){resolve({renderer:'Chrome Canvas2D equivalent scene (not full app)',window:[width,height],vsync:false,nodes:graph.nodes.length,edges:graph.edges.length,phases});return;}
+        if(phase===3)selected=true;
+      }
+      const dt=(now-previous)/1000;samples.push(now-previous);previous=now;const t=elapsed-4-phase*4;
+      if(phase===1)camera=[home[0]+Math.sin(t*2)*700,home[1]-Math.cos(t*2)*400];
+      if(phase===2)scale=homeScale*(.55+.45*Math.abs(Math.cos(t*2)));
+      if(phase===3)for(const n of graph.nodes)if(n.kind!=='Section'){n.rect[0]+=Math.cos(t*2)*dt*160;n.rect[1]-=Math.sin(t*2)*dt*160;}
+      draw();requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+};
+draw();window.ready=true;
+</script>

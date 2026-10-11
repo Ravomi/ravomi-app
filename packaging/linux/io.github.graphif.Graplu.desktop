@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ravomi
+Comment=Ravomi canvas workspace
+Comment[zh_CN]=Ravomi 无限画布工作空间
+Exec=graplu %f
+Icon=graplu
+Terminal=false
+Categories=Graphics;
+MimeType=application/vnd.project-graph;application/x-project-graph;
+StartupWMClass=io.github.graphif.Graplu

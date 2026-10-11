@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Graplu · 相连的画布</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 56px 24px; background: #11111b; color: #cdd6f4; font-family: system-ui, sans-serif; }
+      main { max-width: 880px; margin: auto; }
+      header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+      h1 { font-size: 28px; letter-spacing: -1px; margin: 0; }
+      header p { color: #a6adc8; margin: 0; font-size: 14px; }
+      .hero { display: flex; justify-content: center; padding: 64px 0; }
+      .hero img { width: min(100%, 360px); height: auto; }
+      .caption { text-align: center; margin: 0 0 40px; color: #bac2de; line-height: 1.7; }
+      .caption strong { color: #cdd6f4; display: block; font-size: 20px; font-weight: 500; }
+      .samples { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 44px; padding: 32px; background: #181825; border-radius: 28px; }
+      figure { margin: 0; text-align: center; }
+      figure img { display: block; margin: auto; }
+      figcaption { margin-top: 16px; color: #a6adc8; font-size: 12px; }
+      nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 24px; padding-top: 32px; }
+      a { color: #b4befe; text-underline-offset: 5px; }
+      h2 { font-size: 16px; font-weight: 500; margin: 36px 0 20px; text-align: center; color: #bac2de; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header><h1>Graplu</h1><p>Catppuccin Mocha</p></header>
+      <div class="hero"><img src="graplu-icon.svg?v=solid1" width="360" height="360" alt="Mocha 蓝紫四节点图标，两条连线均与节点同色" /></div>
+      <p class="caption"><strong>相连的画布</strong>让想法相遇。</p>
+      <h2>参考与本轮设计</h2>
+      <div class="samples">
+        <figure><img src="reference-four-nodes.png" width="224" height="224" alt="用户提供的四节点布局参考" /><figcaption>布局参考 · 60 px 原图放大</figcaption></figure>
+        <figure><img src="graplu-icon.svg?v=solid1" width="224" height="224" alt="蓝紫纯色连线的四节点图标" /><figcaption>本轮设计 · 连线与节点同色</figcaption></figure>
+      </div>
+      <h2>实际尺寸</h2>
+      <div class="samples">
+        <figure><img src="graplu-icon.svg?v=solid1" width="128" height="128" alt="128 像素图标" /><figcaption>128 px</figcaption></figure>
+        <figure><img src="graplu-icon.svg?v=solid1" width="64" height="64" alt="64 像素图标" /><figcaption>64 px</figcaption></figure>
+        <figure><img src="graplu-icon.svg?v=solid1" width="32" height="32" alt="32 像素图标" /><figcaption>32 px</figcaption></figure>
+        <figure><img src="graplu-icon.svg?v=solid1" width="16" height="16" alt="16 像素图标" /><figcaption>16 px</figcaption></figure>
+        <figure><img src="graplu-mark.svg?v=solid1" width="128" height="128" alt="透明背景的画布标记" /><figcaption>透明标记</figcaption></figure>
+      </div>
+      <nav aria-label="图标文件"><a href="graplu-icon.svg?v=solid1">应用图标 SVG</a><a href="graplu-mark.svg?v=solid1">透明标记 SVG</a></nav>
+    </main>
+  </body>
+</html>

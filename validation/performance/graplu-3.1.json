@@ -1,0 +1,271 @@
+{
+  "attachments": 24,
+  "continuous_redraw": true,
+  "counts": {
+    "ArcEdge": 10,
+    "ConnectPoint": 36,
+    "ImageNode": 7,
+    "LineEdge": 371,
+    "MultiTargetUndirectedEdge": 10,
+    "PenStroke": 10,
+    "Section": 87,
+    "SvgNode": 9,
+    "TextNode": 482,
+    "UrlNode": 5
+  },
+  "diagnostics": true,
+  "edges": 391,
+  "editing": null,
+  "environment": {
+    "actual_present_mode": null,
+    "adapter": {
+      "backend": "Vulkan",
+      "device_type": "IntegratedGpu",
+      "driver": "Intel open-source Mesa driver",
+      "driver_info": "Mesa 26.2.3",
+      "name": "Intel(R) Iris(R) Xe Graphics (RPL-P)"
+    },
+    "base_scale_factor": 1.0,
+    "effective_scale_factor": 1.0,
+    "focused": true,
+    "logical_size": [
+      1279.0,
+      799.0
+    ],
+    "physical_size": [
+      1279,
+      799
+    ],
+    "requested_present_mode": "AutoNoVsync",
+    "scale_factor_override": 1.0,
+    "window_backend": "X11"
+  },
+  "load_ms": 2345.744224,
+  "msdf": {
+    "atlas_bytes_per_copy": 16777216,
+    "atlas_pages": 4,
+    "color_labels": 1,
+    "failed_labels": 0,
+    "generated_glyphs": 643,
+    "mesh_rebuilds": 9236,
+    "pending_glyphs": 0,
+    "pending_labels": 0
+  },
+  "nodes": 636,
+  "phases": [
+    {
+      "app_schedule_ms": {
+        "mean_ms": 1.5702063680555538,
+        "p95_ms": 2.0866190000000002,
+        "p99_ms": 2.497958,
+        "steps": 1152
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "edge_mesh_rebuilds": 0,
+      "fps": 287.7699061235438,
+      "frames": 1151,
+      "max_active": 0,
+      "mean_ms": 3.474998527367505,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 4.342593,
+      "p99_ms": 4.751783,
+      "phase": "idle",
+      "physics_steps": null,
+      "pss_kib": 508941,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.6820812369791667,
+          "p95_ms": 1.000858,
+          "p99_ms": 1.1600650000000001,
+          "steps": 1152
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 0.46788460048386415,
+          "p95_ms": 0.5848437357215881,
+          "p99_ms": 0.8215624799423218,
+          "steps": 1152
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.004575094618055556,
+          "p95_ms": 0.007963,
+          "p99_ms": 0.020038,
+          "steps": 1152
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.08848546695140022,
+          "p95_ms": 0.1042708307876587,
+          "p99_ms": 0.12583333026123047,
+          "steps": 1152
+        }
+      },
+      "rss_kib": 544404,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": {
+        "mean_ms": 1.6326535107142885,
+        "p95_ms": 2.165013,
+        "p99_ms": 2.889672,
+        "steps": 1120
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "edge_mesh_rebuilds": 0,
+      "fps": 279.76537344067816,
+      "frames": 1120,
+      "max_active": 0,
+      "mean_ms": 3.5744237669642893,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 4.498455,
+      "p99_ms": 5.403636,
+      "phase": "pan",
+      "physics_steps": null,
+      "pss_kib": 508961,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.6999173660714296,
+          "p95_ms": 0.9858810000000001,
+          "p99_ms": 1.2469569999999999,
+          "steps": 1120
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 0.5190604411966735,
+          "p95_ms": 0.5925520688667297,
+          "p99_ms": 0.8764583119354248,
+          "steps": 1120
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.004587500892857143,
+          "p95_ms": 0.008128000000000002,
+          "p99_ms": 0.014629,
+          "steps": 1120
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.09993838111664566,
+          "p95_ms": 0.11661458048629761,
+          "p99_ms": 0.12473958028793335,
+          "steps": 1120
+        }
+      },
+      "rss_kib": 544436,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": {
+        "mean_ms": 15.870611378504671,
+        "p95_ms": 34.069414,
+        "p99_ms": 43.255472000000005,
+        "steps": 214
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "edge_mesh_rebuilds": 0,
+      "fps": 53.7137140709961,
+      "frames": 214,
+      "max_active": 0,
+      "mean_ms": 18.617219406542063,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 33.051317,
+      "p99_ms": 39.021751,
+      "phase": "zoom",
+      "physics_steps": null,
+      "pss_kib": 750105,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.7593949906542057,
+          "p95_ms": 1.0735700000000001,
+          "p99_ms": 1.302966,
+          "steps": 214
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 0.6949673701046741,
+          "p95_ms": 0.9059895612144471,
+          "p99_ms": 0.9468749768829345,
+          "steps": 214
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.004444434579439252,
+          "p95_ms": 0.007506,
+          "p99_ms": 0.011807999999999999,
+          "steps": 214
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.1324953725440658,
+          "p95_ms": 0.18822916207122803,
+          "p99_ms": 0.19828124515914916,
+          "steps": 214
+        }
+      },
+      "rss_kib": 785580,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": {
+        "mean_ms": 4.62165248381877,
+        "p95_ms": 6.478661,
+        "p99_ms": 8.602502,
+        "steps": 618
+      },
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "edge_mesh_rebuilds": 0,
+      "fps": 153.97238260556693,
+      "frames": 618,
+      "max_active": 0,
+      "mean_ms": 6.49467120711974,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 8625,
+      "p95_ms": 9.441845,
+      "p99_ms": 13.736167,
+      "phase": "drag_all",
+      "physics_steps": null,
+      "pss_kib": 798577,
+      "render_spans_ms": {
+        "render/main_transparent_pass_2d/elapsed_cpu": {
+          "mean_ms": 0.753437731391586,
+          "p95_ms": 1.088252,
+          "p99_ms": 1.300869,
+          "steps": 618
+        },
+        "render/main_transparent_pass_2d/elapsed_gpu": {
+          "mean_ms": 0.8883698879660822,
+          "p95_ms": 1.0546353909187316,
+          "p99_ms": 1.1450520553779602,
+          "steps": 618
+        },
+        "render/upscaling/elapsed_cpu": {
+          "mean_ms": 0.005057224919093853,
+          "p95_ms": 0.008735,
+          "p99_ms": 0.019921,
+          "steps": 618
+        },
+        "render/upscaling/elapsed_gpu": {
+          "mean_ms": 0.08196660735700664,
+          "p95_ms": 0.09348958105087281,
+          "p99_ms": 0.10812499736022949,
+          "steps": 618
+        }
+      },
+      "rss_kib": 834052,
+      "sleeping": 0,
+      "text_layouts": 8625
+    }
+  ],
+  "physics": false,
+  "renderer": "Bevy 0.19.1 / wgpu 29.0.4 / MSDF",
+  "timing": "wall-clock frame interval, not GPU time or input latency",
+  "ui": true,
+  "ui_scale": 1.0,
+  "valid": true,
+  "window": [
+    1279,
+    799
+  ]
+}

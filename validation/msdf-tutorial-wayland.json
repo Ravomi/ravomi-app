@@ -1,0 +1,137 @@
+{
+  "attachments": 14,
+  "continuous_redraw": true,
+  "counts": {
+    "ConnectPoint": 21,
+    "LineEdge": 227,
+    "MultiTargetUndirectedEdge": 3,
+    "Section": 27,
+    "TextNode": 345
+  },
+  "diagnostics": false,
+  "edges": 230,
+  "editing": null,
+  "environment": {
+    "actual_present_mode": null,
+    "adapter": {
+      "backend": "Vulkan",
+      "device_type": "IntegratedGpu",
+      "driver": "Intel open-source Mesa driver",
+      "driver_info": "Mesa 26.2.3",
+      "name": "Intel(R) Iris(R) Xe Graphics (RPL-P)"
+    },
+    "base_scale_factor": 1.75,
+    "effective_scale_factor": 1.0,
+    "focused": false,
+    "logical_size": [
+      2240.0,
+      1400.0
+    ],
+    "physical_size": [
+      2240,
+      1400
+    ],
+    "requested_present_mode": "AutoNoVsync",
+    "scale_factor_override": 1.0,
+    "window_backend": "Wayland"
+  },
+  "load_ms": 5153.597745,
+  "msdf": {
+    "atlas_bytes_per_copy": 12582912,
+    "atlas_pages": 3,
+    "failed_labels": 0,
+    "generated_glyphs": 501,
+    "mesh_rebuilds": 400,
+    "pending_glyphs": 0,
+    "pending_labels": 0
+  },
+  "nodes": 393,
+  "phases": [
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 102.88686976492477,
+      "frames": 412,
+      "max_active": 0,
+      "mean_ms": 9.719413199029121,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 11.769245,
+      "p99_ms": 12.644255,
+      "phase": "idle",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 392092,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 116.0742948033176,
+      "frames": 464,
+      "max_active": 0,
+      "mean_ms": 8.615171874999996,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 11.56983,
+      "p99_ms": 13.154803,
+      "phase": "pan",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 392140,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 108.01223262837276,
+      "frames": 432,
+      "max_active": 0,
+      "mean_ms": 9.258210627314808,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 12.506616999999999,
+      "p99_ms": 13.948446,
+      "phase": "zoom",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 392224,
+      "sleeping": 0,
+      "text_layouts": 0
+    },
+    {
+      "app_schedule_ms": null,
+      "candidate_pairs": 0,
+      "contacts": 0,
+      "fps": 121.19502215060804,
+      "frames": 485,
+      "max_active": 0,
+      "mean_ms": 8.251163969072165,
+      "msdf_generated_glyphs": 0,
+      "msdf_mesh_rebuilds": 0,
+      "p95_ms": 10.855022,
+      "p99_ms": 13.453763,
+      "phase": "drag_all",
+      "physics_steps": null,
+      "render_spans_ms": {},
+      "rss_kib": 392332,
+      "sleeping": 0,
+      "text_layouts": 0
+    }
+  ],
+  "physics": false,
+  "renderer": "Bevy 0.19.1 / wgpu 29.0.4 / MSDF",
+  "timing": "wall-clock frame interval, not GPU time or input latency",
+  "ui": true,
+  "ui_scale": 1.0,
+  "valid": true,
+  "window": [
+    2240,
+    1400
+  ]
+}
