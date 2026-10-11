@@ -3,6 +3,10 @@
 use super::*;
 use std::time::Duration;
 
+// Logical screen pixels: tolerate touchpad tap drift without accepting a drag.
+const CLICK_SLOP_SQUARED: f32 = 8.0 * 8.0;
+const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(500);
+
 #[derive(Default)]
 pub struct Gesture {
     pressed: Option<(Vec2, Vec3)>,
@@ -19,10 +23,9 @@ impl Gesture {
     }
 
     pub fn observe(&mut self, cursor: Vec2, view: Vec3) {
-        if self
-            .pressed
-            .is_some_and(|(start, camera)| start.distance_squared(cursor) > 25.0 || camera != view)
-            || self.previous.is_some_and(|(_, _, camera)| camera != view)
+        if self.pressed.is_some_and(|(start, camera)| {
+            start.distance_squared(cursor) > CLICK_SLOP_SQUARED || camera != view
+        }) || self.previous.is_some_and(|(_, _, camera)| camera != view)
         {
             self.cancel();
         }
@@ -38,7 +41,7 @@ impl Gesture {
             .previous
             .take()
             .is_some_and(|(time, position, camera)| {
-                now.saturating_duration_since(time) < Duration::from_millis(300)
+                now.saturating_duration_since(time) <= DOUBLE_CLICK_INTERVAL
                     && cursor.distance_squared(position) < 400.0
                     && camera == view
             })

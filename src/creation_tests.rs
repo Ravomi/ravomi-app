@@ -35,9 +35,25 @@ fn dragging_returning_to_start_or_navigation_does_not_create() {
 }
 
 #[test]
+fn relaxed_double_click_accepts_touchpad_drift_and_slower_second_tap() {
+    let mut gesture = Gesture::default();
+    let view = Vec3::Z;
+    let time = Instant::now();
+    gesture.press(Vec2::ZERO, view);
+    assert!(!gesture.release(Vec2::new(6.0, 0.0), view, time, true));
+    gesture.press(Vec2::new(6.0, 0.0), view);
+    assert!(gesture.release(
+        Vec2::new(12.0, 0.0),
+        view,
+        time + Duration::from_millis(450),
+        true
+    ));
+}
+
+#[test]
 fn timeout_distance_occupied_release_and_cancellation_reject_double_click() {
     for (delay, cursor, empty, cancel) in [
-        (301, Vec2::ZERO, true, false),
+        (501, Vec2::ZERO, true, false),
         (100, Vec2::new(21.0, 0.0), true, false),
         (100, Vec2::ZERO, false, false),
         (100, Vec2::ZERO, true, true),
