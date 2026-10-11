@@ -147,6 +147,59 @@ fn wait(runtime: &Runtime, predicate: impl Fn(&Workflow) -> bool) -> Workflow {
 }
 
 #[test]
+fn canvas_only_workflow_runs_and_survives_mio_without_external_project() {
+    use crate::document::Document;
+    let storage = tempfile::tempdir().unwrap();
+    let runtime = Runtime::with_executor(storage.path().into(), Arc::new(Fake::default())).unwrap();
+    let snapshot = runtime
+        .command(Command::Create {
+            project: String::new(),
+            paths: vec![],
+            goal: "讲解 Pi Agent".into(),
+            model: "test/fake".into(),
+            test_command: vec![],
+        })
+        .unwrap();
+    let id = snapshot.workflows[0].id.clone();
+    let planned = wait(&runtime, |w| w.draft_plan.is_some());
+    assert!(planned.project.is_empty());
+    assert!(planned.files.is_empty());
+    runtime
+        .command(Command::SetPlan {
+            id: id.clone(),
+            plan: planned.draft_plan.unwrap(),
+        })
+        .unwrap();
+    runtime.command(Command::Start { id: id.clone() }).unwrap();
+    wait(&runtime, |w| {
+        w.runs.len() == 5 && w.runs.iter().all(|r| r.status == Status::Succeeded)
+    });
+    let mut doc = Document::blank().unwrap();
+    let mut bindings = canvas::Bindings::default();
+    bindings.workflows.push(canvas::Binding {
+        workflow_id: id,
+        input_ids: vec![],
+        anchor: [0.0, 0.0],
+        agents: vec![],
+    });
+    bindings
+        .sync(&mut doc, &runtime.snapshot().unwrap())
+        .unwrap();
+    let destination = storage.path().join("canvas.mio");
+    doc.save(&destination).unwrap();
+    drop(runtime);
+    fs::remove_file(storage.path().join("workflows.json")).unwrap();
+    let restored = Document::open(&destination).unwrap();
+    assert_eq!(restored.history_archive(), doc.history_archive());
+    assert_eq!(restored.history_archive().workflows[0].runs.len(), 5);
+    assert!(
+        !restored.history_archive().workflows[0].runs[1]
+            .output
+            .is_empty()
+    );
+}
+
+#[test]
 fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_versions() {
     use crate::document::Document;
     use std::collections::HashSet;

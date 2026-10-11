@@ -45,9 +45,7 @@ impl Default for State {
             runtime: None,
             snapshot: ai::Snapshot::default(),
             open: false,
-            project: std::env::current_dir()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default(),
+            project: String::new(),
             paths: String::new(),
             test_command: "[]".into(),
             model: "deepseek/deepseek-flash".into(),
@@ -472,9 +470,10 @@ pub fn ui(
                     ui.label("项目内历史保持为归档；连接本机流程后才接收更新与控制运行。");
                     if ui.add_enabled(!state.busy && editor.active.is_none() && !scene.0.in_transaction(), egui::Button::new("连接本机已保存流程")).clicked() { connect = true; }
                 }
-                ui.collapsing("项目与模型", |ui| {
-                    ui.label("项目目录"); ui.text_edit_singleline(&mut state.project);
-                    ui.label("允许读取的代码路径（每行一项，相对项目目录）");
+                ui.weak("选区文字直接作为输入；运行记录与成果随当前 .mio 保存。模型仍需有效连接配置。");
+                ui.collapsing("模型与可选代码附件", |ui| {
+                    ui.label("外部代码项目目录（可留空）"); ui.text_edit_singleline(&mut state.project);
+                    ui.label("附加代码路径（可留空；每行一项，相对外部项目目录）");
                     ui.add(egui::TextEdit::multiline(&mut state.paths).desired_rows(3));
                     ui.label("授权的测试命令 argv（JSON 数组；空数组不运行测试）");
                     ui.text_edit_singleline(&mut state.test_command);
@@ -608,12 +607,6 @@ pub fn ui(
     if submit && !state.busy {
         let result = (|| {
             let (goal, ids, anchor) = bindings.capture(&scene.0, &interaction.selected)?;
-            if state.paths.trim().is_empty() {
-                state.open = true;
-                return Err(
-                    "请在项目与模型中指定项目目录和允许读取的代码文件，再按 Space 执行".into(),
-                );
-            }
             if bindings.workflows.iter().any(|b| {
                 b.input_ids == ids
                     && connected.workflows.iter().any(|w| {
