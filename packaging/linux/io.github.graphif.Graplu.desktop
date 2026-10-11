@@ -7,5 +7,5 @@ Exec=graplu %f
 Icon=ravomi
 Terminal=false
 Categories=Graphics;
-MimeType=application/vnd.project-graph;application/x-project-graph;
+MimeType=application/x-ravomi;application/vnd.project-graph;application/x-project-graph;
 StartupWMClass=io.github.graphif.Graplu

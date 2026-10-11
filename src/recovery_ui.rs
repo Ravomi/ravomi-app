@@ -80,6 +80,7 @@ impl Recovery {
         let mut chosen = None;
         let mut refresh = false;
         let mut delete = None;
+        let mut restore_error = None;
         egui::Modal::new("recovery-browser".into())
             .frame(theme::tool_frame(light))
             .show(ctx, |ui| {
@@ -157,8 +158,13 @@ impl Recovery {
                                 } else {
                                     ui.horizontal(|ui| {
                                         if ui.add(theme::primary_button("恢复为新草稿", light)).clicked() {
-                                            chosen = Some(Action::Restore(directory.join("document.prg")));
-                                            self.open = false;
+                                            match recovery::document_path(directory) {
+                                                Ok(path) => {
+                                                    chosen = Some(Action::Restore(path));
+                                                    self.open = false;
+                                                }
+                                                Err(error) => restore_error = Some(error.to_string()),
+                                            }
                                         }
                                         if ui.button("删除副本…").clicked() { self.confirm_delete = Some(directory.clone()); }
                                     });
@@ -167,6 +173,9 @@ impl Recovery {
                         }
                     });
             });
+        if let Some(error) = restore_error {
+            self.catalog.errors.push(error);
+        }
         if let Some(path) = delete {
             self.scan(Some(path));
         } else if refresh {

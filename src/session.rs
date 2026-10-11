@@ -19,6 +19,9 @@ pub enum Command {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub project_id: String,
+    pub document_token: String,
+    pub archived_workflow_count: usize,
     pub title: String,
     pub path: Option<String>,
     pub dirty: bool,
@@ -40,12 +43,14 @@ pub struct Node {
 
 pub struct Session {
     document: Document,
+    document_token: String,
 }
 
 impl Session {
     pub fn new() -> Result<Self, String> {
         Ok(Self {
             document: Document::blank().map_err(|error| error.to_string())?,
+            document_token: uuid::Uuid::new_v4().to_string(),
         })
     }
 
@@ -53,6 +58,9 @@ impl Session {
         let document = &self.document;
         let protected = document.protected_nodes();
         Snapshot {
+            project_id: document.project_id().to_owned(),
+            document_token: self.document_token.clone(),
+            archived_workflow_count: document.history_archive().workflows.len(),
             title: document
                 .path
                 .as_ref()
@@ -82,17 +90,43 @@ impl Session {
         }
     }
 
+    pub fn project_id(&self) -> &str {
+        self.document.project_id()
+    }
+
+    /// A local handle for this open document, distinct from the portable ID
+    /// shared by Save As copies. It is never serialized into the project file.
+    pub fn document_token(&self) -> &str {
+        &self.document_token
+    }
+
+    pub fn archived_history(&self) -> &crate::project_history::History {
+        self.document.history_archive()
+    }
+
+    pub fn attach_history(
+        &mut self,
+        history: crate::project_history::History,
+    ) -> Result<Snapshot, String> {
+        self.document
+            .attach_history(history)
+            .map_err(|error| error.to_string())?;
+        Ok(self.snapshot())
+    }
+
     pub fn execute(&mut self, command: Command) -> Result<Snapshot, String> {
         match command {
             Command::New { discard } => {
                 self.check_discard(discard)?;
                 self.document = Document::blank().map_err(|error| error.to_string())?;
+                self.document_token = uuid::Uuid::new_v4().to_string();
             }
             Command::Open { path, discard } => {
                 self.check_discard(discard)?;
                 // Parse before replacing the live document; a failure preserves edits.
                 self.document =
                     Document::open(Path::new(&path)).map_err(|error| error.to_string())?;
+                self.document_token = uuid::Uuid::new_v4().to_string();
             }
             Command::Save { path } => self
                 .document

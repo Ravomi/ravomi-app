@@ -1,6 +1,7 @@
 use super::*;
 use bevy::ecs::system::RunSystemOnce;
 use bevy_egui::egui;
+use project_graph_bevy_canvas::project;
 use std::sync::{Mutex, mpsc};
 use std::time::Duration;
 
@@ -345,7 +346,10 @@ impl Tabs {
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let result = rfd::FileDialog::new()
-                .add_filter("画布文档 (.prg)", &["prg"])
+                .add_filter(
+                    "Ravomi 项目与兼容画布",
+                    &[project::EXTENSION, project::LEGACY_EXTENSION],
+                )
                 .pick_file()
                 .map(|path| Document::open(&path).map_err(|e| e.to_string()))
                 .transpose();
@@ -968,10 +972,12 @@ mod tests {
             .unwrap();
             assert_eq!(entries.len(), 1);
             assert_eq!(
-                Document::open(&entries[0].0.join("document.prg"))
-                    .unwrap()
-                    .nodes
-                    .len(),
+                Document::open(
+                    &project_graph_bevy_canvas::recovery::document_path(&entries[0].0).unwrap()
+                )
+                .unwrap()
+                .nodes
+                .len(),
                 1
             );
         }
@@ -1015,7 +1021,7 @@ mod tests {
     #[test]
     fn save_as_rejects_another_open_document_path_and_cancel_close_is_non_destructive() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("other.prg");
+        let path = dir.path().join("other.mio");
         let mut other = Document::blank().unwrap();
         other.save(&path).unwrap();
         let doc = Document::blank().unwrap();
@@ -1027,8 +1033,9 @@ mod tests {
             document: Some(other),
             view: None,
         });
-        assert!(tabs.path_in_other_tab(&dir.path().join("./other.prg")));
-        assert!(!tabs.path_in_other_tab(&dir.path().join("new.prg")));
+        assert!(tabs.path_in_other_tab(&dir.path().join("./other.mio")));
+        assert!(tabs.path_in_other_tab(&project::save_path(&dir.path().join("other")).unwrap()));
+        assert!(!tabs.path_in_other_tab(&project::save_path(&dir.path().join("new")).unwrap()));
         tabs.confirm_close = true;
         tabs.close_after_save = true;
         tabs.cancel_close();

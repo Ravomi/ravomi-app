@@ -42,6 +42,8 @@ pub fn run() -> Result<(), tauri::Error> {
         })
         .invoke_handler(tauri::generate_handler![
             collaboration::ai_snapshot,
+            collaboration::archive_project_workflow,
+            collaboration::project_archived_history,
             collaboration::ai_configure,
             collaboration::ai_command,
             collaboration::ai_scan,

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-ravomi">
+    <comment>Ravomi project</comment>
+    <comment xml:lang="zh_CN">Ravomi 项目</comment>
+    <glob pattern="*.mio" weight="80"/>
+  </mime-type>
   <mime-type type="application/vnd.project-graph">
     <comment>Project Graph document</comment>
     <comment xml:lang="zh_CN">Project Graph 图文件</comment>

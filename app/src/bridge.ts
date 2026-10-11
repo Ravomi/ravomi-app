@@ -11,6 +11,9 @@ export interface GraphNode {
 }
 
 export interface Snapshot {
+  projectId: string;
+  documentToken: string;
+  archivedWorkflowCount: number;
   title: string;
   path: string | null;
   dirty: boolean;

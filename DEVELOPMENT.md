@@ -174,3 +174,7 @@ cargo fmt --check
 可使用 `./run.sh --save-copy /absolute/path/copy.prg` 验证未修改文件的另存为。原版教程的编辑、全图移动、撤销、保存往返、非舞台条目逐字节保留与外部修改冲突检测由 `cargo test --no-default-features -- --include-ignored` 验证。坐标校验容差 0.01 世界单位，与原版序列化精度一致。保存保留节点的自动/手动尺寸模式；原版仍会按自己的字体引擎重新测量，不能承诺两版视觉尺寸逐像素一致。
 
 中文字体由运行时外部加载，不随代码仓库分发；本机 Noto Sans CJK 的许可为 SIL OFL 1.1（`/usr/share/licenses/google-noto-sans-cjk-fonts/LICENSE`）。egui 保留内置字体回退。Bevy 与 egui 使用不同排版引擎；同一字体并不保证完全相同的换行。真实输入法候选窗、组合输入及跨平台行为须人工验收，自动输入测试不能替代。
+
+## 原生项目与存储边界
+
+默认项目后缀为 `.mio`，结构与版本以 [STORAGE.md](STORAGE.md) 为准。`src/project.rs` 负责容器清单与布局，`src/project_history.rs` 负责显式选择的只读协作归档，`Document` 负责保存与往返校验，`src/storage.rs` 复用本机路径和原子写入工具。`.prg` 仍按原格式读写，另存为 `.mio` 完成转换；无法保留协作历史或原生扩展时拒绝降级至 `.prg`。本机 `Runtime` 不从项目归档恢复执行，画布撤销栈也不作为持久化运行历史。

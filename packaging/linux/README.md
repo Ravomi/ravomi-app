@@ -1,6 +1,6 @@
 # Ravomi Linux 安装与文档缩略图
 
-本目录提供现有 Bevy 原生画布的安装入口和 `.prg` 离线预览，不包含完整 React/Tauri 发布或 Agent 执行环境。产品与阶段状态见 [README](../../README.md)、[PRD](../../PRD.md)；React/Tauri 入口见 [app/README](../../app/README.md)。
+本目录提供现有 Bevy 原生画布的安装入口，以及 `.mio` 项目和 `.prg` 兼容画布的离线预览，不包含完整 React/Tauri 发布或 Agent 执行环境。产品与阶段状态见 [README](../../README.md)、[PRD](../../PRD.md)；React/Tauri 入口见 [app/README](../../app/README.md)。
 
 品牌显示与资源替换遵循 [BRAND](../../assets/branding/BRAND.md)，UI/UX 及 AI 实现规则见 [DESIGN](../../DESIGN.md)、[AI_UI_RULES](../../AI_UI_RULES.md)。发布前单独验收桌面图标的小尺寸识别、窗口文字与清晰度；现有兼容图标和旧式缩略图不会因规范更新自动符合新设计。保留既有程序 ID、用户数据路径和 MIME 的兼容性。
 
@@ -13,13 +13,15 @@ cargo build --release --locked
 bash packaging/linux/install-app.sh
 ```
 
-需要 `desktop-file-utils`。安装后在应用菜单搜索 Ravomi。为兼容已有安装，程序路径暂保留 `~/.local/bin/graplu`，启动项 ID 与旧图标资源保留在 `${XDG_DATA_HOME:-~/.local/share}`，后续由统一打包配置迁移。不需要 sudo，不更改默认文件关联。安装脚本也接受已编译二进制的路径作为第一个参数。
+需要 `desktop-file-utils` 和 `shared-mime-info`。安装后在应用菜单搜索 Ravomi。为兼容已有安装，程序路径暂保留 `~/.local/bin/graplu`，启动项 ID 与旧图标资源保留在 `${XDG_DATA_HOME:-~/.local/share}`，后续由统一打包配置迁移。安装会注册 `.mio` 与兼容 `.prg` 类型，不需要 sudo，不更改默认打开应用。安装脚本也接受已编译二进制的路径作为第一个参数。
 
 ## Linux 文件管理器缩略图
 
-为 `.prg` 文件生成离线 PNG 预览，复用并维护 Godot 版的 Python/Cairo/Pango 工具。不启动 Bevy/Godot，不执行文档代码，不修改源文件；这不是画布内的节点或分组缩略图。
+为 `.mio` 和 `.prg` 文件生成离线 PNG 预览，复用并维护 Godot 版的 Python/Cairo/Pango 工具。不启动 Bevy/Godot，不执行文档代码，不修改源文件；这不是画布内的节点或分组缩略图。
 
-支持 Bevy/master 的 ZIP `stage.msgpack`、Godot 的 ZIP `stage.json`、原生 `PGDOC4` JSON 预览块，以及仅含 `thumbnail.png` 的旧文件。PGDOC4 会校验块范围及 SHA-256，不解码 Godot Variant 记录。
+支持 Ravomi `.mio` 的 ZIP `manifest.json`、`canvas/stage.msgpack` 和 `assets/`；校验项目格式版本及必需能力，不读取或执行协作历史。Linux MIME 新增 `application/x-ravomi`，保留 `.prg` 的 `application/vnd.project-graph` 及别名。
+
+兼容预览 Bevy/master 的 ZIP `stage.msgpack`、Godot 的 ZIP `stage.json`、原生 `PGDOC4` JSON 预览块，以及仅含 `thumbnail.png` 的旧文件。PGDOC4 会校验块范围及 SHA-256，不解码 Godot Variant 记录。缩略图支持范围不等同于编辑器支持导入的格式；编辑器当前只支持 `.mio` 与 ZIP + MessagePack `.prg`。
 
 Bevy 保存编辑后可能保留旧 `thumbnail.png`；本工具优先读取当前 stage。损坏的 stage 会报错，不回退到可能过期的图片。PNG 以临时文件原子替换，失败时保留已有输出；拒绝将源文件或其硬链接作为输出。
 

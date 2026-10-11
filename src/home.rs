@@ -1,5 +1,6 @@
 use super::{Document, Graph, theme};
 use bevy_egui::egui;
+use project_graph_bevy_canvas::storage;
 use std::{
     path::{Path, PathBuf},
     sync::{Mutex, mpsc},
@@ -42,13 +43,6 @@ pub struct Home {
     avatar: Option<egui::TextureHandle>,
 }
 
-fn recent_path() -> Option<PathBuf> {
-    std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".local/state")))
-        .map(|p| p.join("graplu/recent.json"))
-}
-
 fn nav_button(
     icons: &[egui::TextureHandle],
     index: usize,
@@ -72,7 +66,7 @@ fn nav_button(
 
 impl Home {
     pub fn observe(&mut self, document: &Document) -> Result<(), String> {
-        self.observe_at(document, recent_path())
+        self.observe_at(document, storage::recent_path())
     }
 
     fn observe_at(&mut self, document: &Document, storage: Option<PathBuf>) -> Result<(), String> {
@@ -163,16 +157,16 @@ impl Home {
         let write = || -> Result<(), Box<dyn std::error::Error>> {
             let parent = destination.parent().ok_or("最近文件记录缺少目录")?;
             std::fs::create_dir_all(parent)?;
-            let mut temp = tempfile::NamedTempFile::new_in(parent)?;
-            serde_json::to_writer(temp.as_file_mut(), &paths)?;
-            temp.persist(destination)?;
-            Ok(())
+            storage::atomic_write(destination, |file| {
+                serde_json::to_writer(file, &paths)?;
+                Ok(())
+            })
         };
         write().map_err(|error| format!("保存最近文件记录失败：{error}"))
     }
 
     pub fn remove_recent(&mut self, path: &Path, delete_file: bool) -> Result<(), String> {
-        self.remove_recent_at(path, delete_file, recent_path().as_deref())
+        self.remove_recent_at(path, delete_file, storage::recent_path().as_deref())
     }
 
     fn remove_recent_at(
@@ -493,7 +487,7 @@ impl Home {
                         if matches.is_empty() {
                             ui.add_space(48.0);
                             ui.label(if query.is_empty() {
-                                "还没有最近文件。新建草稿，或打开一个 .prg 文件开始。"
+                                "还没有最近文件。新建草稿，或打开 .mio 项目或 .prg 兼容画布开始。"
                             } else {
                                 "没有匹配的最近文件"
                             });
@@ -744,7 +738,7 @@ fn recent_card(ui: &egui::Ui, card: egui::Rect, recent: &Recent, highlighted: bo
             graph.edges.len()
         )
     } else {
-        "PRG 画布".to_owned()
+        "Ravomi 项目 / 兼容画布".to_owned()
     };
     painter.text(
         inner.left_bottom() + egui::vec2(18.0, -18.0),

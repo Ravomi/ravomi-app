@@ -715,15 +715,20 @@ impl Editor {
         if copy || doc.path.is_none() {
             if self.dialog.is_none() {
                 let (tx, rx) = mpsc::channel();
+                use project_graph_bevy_canvas::project;
                 let name = doc
                     .path
                     .as_ref()
-                    .and_then(|p| p.file_name())
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "project.prg".into());
+                    .map(|path| path.with_extension(project::EXTENSION))
+                    .and_then(|path| {
+                        path.file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                    })
+                    .unwrap_or_else(|| project::DEFAULT_FILE_NAME.into());
                 std::thread::spawn(move || {
                     let path = rfd::FileDialog::new()
-                        .add_filter("画布文档 (.prg)", &["prg"])
+                        .add_filter(project::FILTER_NAME, &[project::EXTENSION])
+                        .add_filter("兼容画布 (.prg)", &[project::LEGACY_EXTENSION])
                         .set_file_name(&name)
                         .save_file();
                     let _ = tx.send(path);
@@ -924,12 +929,23 @@ pub fn ui(
             Ok(path) => {
                 editor.dialog = None;
                 if let Some(path) = path {
-                    if tabs.path_in_other_tab(&path) {
-                        editor.report_error("此文件已在其他标签页打开，请选择其他保存位置".into());
-                        tabs.close_after_save = false;
-                    } else if let Err(e) = scene.0.save(&path) {
-                        editor.error = Some(e.to_string());
-                        tabs.close_after_save = false;
+                    match project_graph_bevy_canvas::project::save_path(&path) {
+                        Ok(path) if tabs.path_in_other_tab(&path) => {
+                            editor.report_error(
+                                "此文件已在其他标签页打开，请选择其他保存位置".into(),
+                            );
+                            tabs.close_after_save = false;
+                        }
+                        Ok(path) => {
+                            if let Err(error) = scene.0.save(&path) {
+                                editor.report_error(error.to_string());
+                                tabs.close_after_save = false;
+                            }
+                        }
+                        Err(error) => {
+                            editor.report_error(error.to_string());
+                            tabs.close_after_save = false;
+                        }
                     }
                 } else {
                     editor.closing = false;

@@ -21,6 +21,84 @@ SPEC.loader.exec_module(thumbnailer)
 
 
 class ThumbnailTests(unittest.TestCase):
+    def test_mio_preview_reads_native_canvas_and_assets_without_touching_source(self):
+        import io
+
+        import msgpack
+
+        stage = [
+            {
+                "_": "ImageNode",
+                "uuid": "image",
+                "attachmentId": "picture",
+                "collisionBox": {
+                    "shapes": [
+                        {
+                            "_": "Rectangle",
+                            "location": {"x": 0, "y": 0},
+                            "size": {"x": 100, "y": 100},
+                        }
+                    ]
+                },
+            }
+        ]
+        manifest = {
+            "format": "ravomi-project",
+            "schemaVersion": 1,
+            "projectId": "90d4ef64-087e-476b-8a2a-dfd03f1b9e59",
+            "canvasSchemaVersion": 1,
+            "requiredFeatures": [],
+        }
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 100, 100)
+        context = cairo.Context(surface)
+        context.set_source_rgb(1, 0, 0)
+        context.paint()
+        png = io.BytesIO()
+        surface.write_to_png(png)
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = (
+                Path(directory, "project.mio"),
+                Path(directory, "preview.png"),
+            )
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("manifest.json", json.dumps(manifest))
+                archive.writestr("canvas/stage.msgpack", msgpack.packb(stage))
+                archive.writestr("assets/picture.png", png.getvalue())
+                archive.writestr("collaboration/history.json", b"not read for previews")
+            before = source.read_bytes()
+            thumbnailer.render(str(source), str(output), 128)
+            self.assertEqual(source.read_bytes(), before)
+            self.assertGreater(
+                sum(pixel == (255, 0, 0) for pixel in self.pixels(output.read_bytes())),
+                1000,
+            )
+
+    def test_mio_preview_rejects_future_manifest_without_using_legacy_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = (
+                Path(directory, "project.mio"),
+                Path(directory, "preview.png"),
+            )
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr(
+                    "manifest.json",
+                    json.dumps(
+                        {
+                            "format": "ravomi-project",
+                            "schemaVersion": 2,
+                            "canvasSchemaVersion": 1,
+                            "projectId": "90d4ef64-087e-476b-8a2a-dfd03f1b9e59",
+                        }
+                    ),
+                )
+                archive.writestr(
+                    "stage.json", json.dumps({"objects": [self.node("old", "stale")]})
+                )
+            output.write_bytes(b"previous preview")
+            with self.assertRaisesRegex(ValueError, "Unsupported Ravomi project"):
+                thumbnailer.render(str(source), str(output), 128)
+            self.assertEqual(output.read_bytes(), b"previous preview")
+
     def native_document(self, directory, graph):
         source = Path(directory, "native.prg")
         blocks = {}
@@ -389,7 +467,11 @@ class ThumbnailTests(unittest.TestCase):
             self.assertEqual(section["Exec"], section["TryExec"] + " %i %o %s")
             self.assertEqual(
                 set(section["MimeType"].strip(";").split(";")),
-                {"application/vnd.project-graph", "application/x-project-graph"},
+                {
+                    "application/x-ravomi",
+                    "application/vnd.project-graph",
+                    "application/x-project-graph",
+                },
             )
             mime = root / "usr/share/mime"
             subprocess.run(
@@ -401,6 +483,9 @@ class ThumbnailTests(unittest.TestCase):
             )
             self.assertIn(
                 "80:application/vnd.project-graph:*.prg", (mime / "globs2").read_text()
+            )
+            self.assertIn(
+                "80:application/x-ravomi:*.mio", (mime / "globs2").read_text()
             )
             source, output = root / "中文 空格.prg", root / "preview.png"
             with zipfile.ZipFile(source, "w") as archive:

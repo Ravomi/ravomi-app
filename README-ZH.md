@@ -183,3 +183,7 @@ vendor/       保留来源与修改记录的依赖
 Ravomi 由 Arcraven 开发，沿用 Project Graph / Graplu 原型的部分基础与 `.prg` 兼容约定。感谢上游作者、开源依赖维护者，以及参与代码、设计、文档和测试的贡献者。来源与迁移记录见 [MIGRATION](MIGRATION.md)，完整致谢索引见 [CREDITS](CREDITS.md)。
 
 项目采用 [GPL-3.0-only](LICENSE)。第三方组件保留各自版权与许可证；品牌资源说明见 [BRAND](assets/branding/BRAND.md)。
+
+## 原生项目文件
+
+新建 Ravomi 项目使用 `.mio`：以版本化 ZIP 包保存画布、资产和明确选定的协作历史。既有 `.prg` 画布保留兼容读写；打开项目不恢复归档中的任务，本机活动运行记录独立保存。包内结构、转换规则和当前限制见 [存储规范](STORAGE.md)。

@@ -36,7 +36,7 @@ impl Runtime {
         executor: Arc<dyn pi::Executor>,
     ) -> Result<Self> {
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        let path = directory.join("workflows.json");
+        let path = directory.join(crate::storage::WORKFLOWS_FILE_NAME);
         let mut snapshot: Snapshot = if path.exists() {
             if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
                 return Err("运行记录超过 64 MiB，请先归档".into());
@@ -544,12 +544,11 @@ fn persist(path: &Path, snapshot: &Snapshot) -> Result<()> {
     if bytes.len() > 64 * 1024 * 1024 {
         return Err("运行记录超过 64 MiB，请先归档".into());
     }
-    let mut temp = tempfile::NamedTempFile::new_in(path.parent().ok_or("缺少运行目录")?)
-        .map_err(|e| e.to_string())?;
-    temp.write_all(&bytes).map_err(|e| e.to_string())?;
-    temp.as_file().sync_all().map_err(|e| e.to_string())?;
-    temp.persist(path).map_err(|e| e.to_string())?;
-    Ok(())
+    crate::storage::atomic_write(path, |file| {
+        file.write_all(&bytes)?;
+        Ok(())
+    })
+    .map_err(|e| e.to_string())
 }
 fn get_workflow<'a>(s: &'a mut Snapshot, id: &str) -> Result<&'a mut Workflow> {
     s.workflows

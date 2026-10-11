@@ -1,14 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ask, open } from '@tauri-apps/plugin-dialog';
-import { native } from './bridge';
-import { aiSnapshot, aiCommand, aiScan, aiExport, aiConfigure, type CollaborationSnapshot, type Run, type RunStatus, type Workflow } from './collaboration';
+import { native, type Snapshot } from './bridge';
+import { aiSnapshot, aiCommand, aiScan, aiExport, aiConfigure, archiveProjectWorkflow, projectArchivedHistory, type CollaborationSnapshot, type ProjectHistory, type Run, type RunStatus, type Workflow } from './collaboration';
 import { Icon } from './Icon';
 import './collaboration.css';
 
 const labels: Record<RunStatus, string> = { queued: '排队', running: '运行中', stopping: '停止中', succeeded: '已生成', failed: '失败', cancelled: '已停止', unknown: '待核对', storage_blocked: '产物待保存' };
 const last = (w: Workflow, task: string) => [...w.runs].reverse().find(r => r.taskId === task);
 
-export function Collaboration() {
+interface Props {
+  currentProject: Snapshot;
+  projectBusy: boolean;
+  runProjectAction: (operation: () => Promise<void>) => Promise<void>;
+  onProjectChange: (snapshot: Snapshot) => void;
+}
+
+export function Collaboration({ currentProject, projectBusy, runProjectAction, onProjectChange }: Props) {
   const [snapshot, setSnapshot] = useState<CollaborationSnapshot>({ version: 1, workflows: [], storageError: null });
   const [workflowId, setWorkflowId] = useState('');
   const [project, setProject] = useState('');
@@ -24,6 +31,14 @@ export function Collaboration() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [history, setHistory] = useState<{ projectId: string; documentToken: string; value: ProjectHistory } | null>(null);
+  const [historyError, setHistoryError] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const currentDocument = useRef(currentProject);
+  currentDocument.current = currentProject;
+  const archived = history?.projectId === currentProject.projectId && history.documentToken === currentProject.documentToken ? history.value : null;
   const workflow = snapshot.workflows.find(w => w.id === workflowId);
   const run = workflow?.runs.find(r => r.id === runId);
   const planSource = workflow?.plan ?? workflow?.draftPlan;
@@ -41,6 +56,17 @@ export function Collaboration() {
     return () => { stopped = true; clearTimeout(timer); };
   }, []);
   useEffect(() => { setPlanText(planSource ? JSON.stringify(planSource, null, 2) : ''); }, [workflowId, JSON.stringify(planSource)]);
+  useEffect(() => { setNotice(''); }, [currentProject.documentToken]);
+  useEffect(() => {
+    if (!native || !historyOpen || !currentProject.projectId || !currentProject.documentToken) return;
+    let stopped = false;
+    setHistoryLoading(true); setHistoryError('');
+    projectArchivedHistory(currentProject.projectId, currentProject.documentToken)
+      .then(value => { if (!stopped) setHistory({ projectId: currentProject.projectId, documentToken: currentProject.documentToken, value }); })
+      .catch((cause: unknown) => { if (!stopped) setHistoryError(String(cause)); })
+      .finally(() => { if (!stopped) setHistoryLoading(false); });
+    return () => { stopped = true; };
+  }, [currentProject.projectId, currentProject.documentToken, currentProject.archivedWorkflowCount, historyOpen, historyRevision]);
 
   async function action(operation: () => Promise<void>) {
     if (busy) return;
@@ -69,6 +95,15 @@ export function Collaboration() {
     const directory = await open({ directory: true, title: '导出已审阅代码快照' });
     if (directory && workflow) setNotice(`已导出：${await aiExport(workflow.id, result.id, directory)}`);
   }
+  async function archiveWorkflow() {
+    if (!workflow) return;
+    const { projectId, documentToken } = currentProject;
+    const next = await archiveProjectWorkflow(projectId, documentToken, workflow.id);
+    if (currentDocument.current.projectId !== projectId || currentDocument.current.documentToken !== documentToken) return;
+    onProjectChange(next);
+    setHistoryRevision(value => value + 1);
+    setNotice('已将此流程的当前记录加入项目。保存 .mio 项目文件后可随文件重新打开查看。');
+  }
 
   return <main className="collaboration-workspace">
     <section className="collaboration-main" aria-label="代码协作">
@@ -76,6 +111,15 @@ export function Collaboration() {
       {!native && <p className="banner">浏览器仅预览；请在 Ravomi 桌面应用中运行代码协作。</p>}
       {error && <div role="alert" className="banner error">{error}</div>}
       {notice && <p role="status" className="banner">{notice}</p>}
+      <details aria-label="已保存协作历史" onToggle={event => setHistoryOpen(event.currentTarget.open)}>
+        <summary>已保存协作历史（{currentProject.archivedWorkflowCount}）</summary>
+        <p className="muted">当前项目：{currentProject.title}。这里保留固定的输入、计划、运行与审阅记录；运行状态为保存此记录时的状态，仅供查看。</p>
+        {!native ? <p className="muted">请在桌面应用中打开项目查看历史。</p> : historyLoading ? <p role="status">正在读取项目历史…</p> : historyError ? <div className="banner error" role="alert">{historyError}<button onClick={() => setHistoryRevision(value => value + 1)}>重新读取历史</button></div> : archived && (archived.workflows.length === 0 ? <p className="muted">尚未向此项目保存协作历史。选择一个本机流程后，可以保存它的当前记录。</p> : archived.workflows.map(saved => <details key={saved.id}>
+          <summary>{saved.goal} · {saved.runs.length} 次运行</summary>
+          <p className="muted">{saved.model} · {saved.files.length} 个固定输入 · 只读历史</p>
+          <pre>{JSON.stringify(saved, null, 2)}</pre>
+        </details>))}
+      </details>
       <details className="model-settings"><summary>模型连接设置</summary><div className="ai-config"><label>提供方<select aria-label="模型提供方" value={provider} onChange={e => setProvider(e.target.value)}><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option></select></label><label>API Key<input aria-label="模型 API Key" type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} /></label></div><button disabled={!native || busy || !apiKey.trim()} onClick={() => void action(async () => { await aiConfigure(provider, apiKey); setApiKey(''); setNotice('已更新当前会话的模型凭据；尚未验证网络调用。'); })}>应用到本次会话</button><p className="muted">密钥只保留在当前进程内，不进入项目或运行记录。关闭应用后清除；未填写时使用 API Key 环境变量或已有 Pi API-key 配置。</p></details>
       {snapshot.storageError && <div role="alert" className="banner error">运行记录未保存：{snapshot.storageError}<button onClick={() => void action(() => command({ type: 'flush' }))}>恢复保存</button></div>}
       <div className="workflow-switcher"><label>协作流程<select aria-label="协作流程" value={workflowId} onChange={e => { setWorkflowId(e.target.value); setRunId(''); }}><option value="">新建代码流程</option>{snapshot.workflows.map(w => <option key={w.id} value={w.id}>{w.goal.slice(0, 50)}</option>)}</select></label><button onClick={() => { setWorkflowId(''); setRunId(''); }}>新建流程</button></div>
@@ -89,6 +133,7 @@ export function Collaboration() {
         <button className="primary" disabled={!native || busy || !goal.trim() || !selected.length || !model.trim()} onClick={() => void action(create)}>生成协作计划</button>
       </div> : <>
         <div className="workflow-summary"><h2>{workflow.goal}</h2><p className="muted">{workflow.model} · {workflow.files.length} 个固定输入 · {workflow.runs.length}/{workflow.maxCalls} 次运行 · 最多 2 路并行</p><p className="source-path">{workflow.project}</p></div>
+        <div className="workflow-controls"><button disabled={!native || busy || projectBusy || !currentProject.projectId || !currentProject.documentToken} onClick={() => void action(() => runProjectAction(archiveWorkflow))}>保存到当前项目</button><span className="muted">仅保存此流程到「{currentProject.title}」；包含已选源码和运行记录。再次保存会更新此流程的归档，其他已保存流程保留。</span></div>
         <details><summary>查看实际输入与执行范围</summary><p>只发送已选文本与显式依赖成果；不读取其他项目文件，不自动安装依赖。每次运行最长 {workflow.timeoutSeconds} 秒。</p>{workflow.files.map(file => <details key={file.path}><summary>{file.path}</summary><pre>{file.content}</pre></details>)}</details>
         {workflow.runs.filter(r => r.taskId === '$plan').map(r => <button className="planning-state" key={r.id} onClick={() => setRunId(r.id)}>规划 Agent · {labels[r.status]}{r.error ? ` · ${r.error}` : ''}</button>)}
         {planSource && !workflow.runs.some(r => !r.taskId.startsWith('$')) && <details open className="plan-editor"><summary>审阅与编辑任务计划</summary><p className="muted">可以调整职责、指令、验收条件、dependencies 与 parentAgent；保存计划不会执行任务。</p><textarea aria-label="任务计划 JSON" rows={12} value={planText} onChange={e => setPlanText(e.target.value)} spellCheck={false} /><button disabled={busy} onClick={() => void action(() => command({ type: 'set_plan', id: workflow.id, plan: JSON.parse(planText) }))}>保存计划</button></details>}

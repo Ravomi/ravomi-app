@@ -1,4 +1,8 @@
 use crate::{Graph, GraphEdge, GraphNode, ProjectFile, Result};
+use crate::{
+    project::{self, Format, Manifest},
+    project_history::History,
+};
 use rmpv::Value;
 mod clipboard;
 mod node_lock;
@@ -209,6 +213,9 @@ pub struct Document {
     restored_selection: Option<Selection>,
     pending: Option<(String, Vec<GraphNode>)>,
     archive: Option<Vec<u8>>,
+    manifest: Manifest,
+    archived_history: History,
+    project_dirty: bool,
     original: Vec<GraphNode>,
     original_edges: Vec<GraphEdge>,
     reserved_ids: HashSet<String>,
@@ -262,17 +269,29 @@ impl Document {
             counts: BTreeMap::new(),
         });
         let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        archive.start_file("stage.msgpack", zip::write::SimpleFileOptions::default())?;
-        rmpv::encode::write_value(&mut archive, &Value::Array(vec![]))?;
-        archive.start_file("metadata.msgpack", zip::write::SimpleFileOptions::default())?;
-        rmpv::encode::write_value(
-            &mut archive,
-            &Value::Map(vec![("version".into(), "2.3.0".into())]),
+        archive.start_file(
+            crate::storage::STAGE_ENTRY,
+            zip::write::SimpleFileOptions::default(),
         )?;
-        archive.start_file("tags.msgpack", zip::write::SimpleFileOptions::default())?;
         rmpv::encode::write_value(&mut archive, &Value::Array(vec![]))?;
         archive.start_file(
-            "reference.msgpack",
+            crate::storage::METADATA_ENTRY,
+            zip::write::SimpleFileOptions::default(),
+        )?;
+        rmpv::encode::write_value(
+            &mut archive,
+            &Value::Map(vec![(
+                "version".into(),
+                crate::storage::LEGACY_DOCUMENT_VERSION.into(),
+            )]),
+        )?;
+        archive.start_file(
+            crate::storage::TAGS_ENTRY,
+            zip::write::SimpleFileOptions::default(),
+        )?;
+        rmpv::encode::write_value(&mut archive, &Value::Array(vec![]))?;
+        archive.start_file(
+            crate::storage::REFERENCE_ENTRY,
             zip::write::SimpleFileOptions::default(),
         )?;
         rmpv::encode::write_value(
@@ -305,6 +324,9 @@ impl Document {
             reserved_ids,
             path: None,
             archive: None,
+            manifest: Manifest::default(),
+            archived_history: History::default(),
+            project_dirty: false,
             disk_bytes: None,
             recovered: false,
             overview_excluded: HashSet::new(),
@@ -318,7 +340,8 @@ impl Document {
     }
     pub fn open(path: &Path) -> Result<Self> {
         let bytes = fs::read(path)?;
-        let file = ProjectFile::load(path)?;
+        let contents = project::inspect(&mut zip::ZipArchive::new(Cursor::new(&bytes))?)?;
+        let file = ProjectFile::from_bytes(&bytes)?;
         let objects = file.objects();
         let reserved_ids = objects.keys().cloned().collect();
         let overview_excluded = objects
@@ -351,13 +374,74 @@ impl Document {
         doc.reserved_ids = reserved_ids;
         doc.overview_excluded = overview_excluded;
         doc.sync_members = sync_members;
+        doc.manifest = contents.manifest;
+        doc.archived_history = contents.history;
         doc.path = Some(fs::canonicalize(path)?);
         doc.archive = Some(bytes.clone());
         doc.disk_bytes = Some(bytes);
         Ok(doc)
     }
     pub fn dirty(&self) -> bool {
-        self.recovered || self.pending.is_some() || !self.history.is_saved()
+        self.recovered || self.project_dirty || self.pending.is_some() || !self.history.is_saved()
+    }
+
+    pub fn project_id(&self) -> &str {
+        &self.manifest.project_id
+    }
+
+    pub fn history_archive(&self) -> &History {
+        &self.archived_history
+    }
+
+    /// Capture evidence, not runnable jobs. Refreshing a workflow replaces only
+    /// that workflow's archived snapshot and keeps the other selected workflows.
+    pub fn attach_history(&mut self, history: History) -> Result<()> {
+        history.validate()?;
+        let mut next = self.archived_history.clone();
+        for workflow in history.workflows {
+            if let Some(previous) = next
+                .workflows
+                .iter_mut()
+                .find(|item| item.id == workflow.id)
+            {
+                for old in &previous.runs {
+                    let fresh = workflow
+                        .runs
+                        .iter()
+                        .find(|run| run.id == old.id)
+                        .ok_or("本机流程缺少项目已保存的运行，未覆盖较完整的协作历史")?;
+                    if old.prompt != fresh.prompt
+                        || old.input_files != fresh.input_files
+                        || old.sources != fresh.sources
+                        || old.task_id != fresh.task_id
+                        || old.created_at != fresh.created_at
+                        || old.retry_of != fresh.retry_of
+                    {
+                        return Err("同一运行的固定输入发生冲突，未覆盖协作历史".into());
+                    }
+                    if matches!(
+                        old.status,
+                        crate::project_history::ArchivedStatus::Succeeded
+                            | crate::project_history::ArchivedStatus::Failed
+                            | crate::project_history::ArchivedStatus::Cancelled
+                    ) {
+                        let mut reviewed = old.clone();
+                        reviewed.review.clone_from(&fresh.review);
+                        if &reviewed != fresh {
+                            return Err("同一运行的已完成成果发生冲突，未覆盖协作历史".into());
+                        }
+                    }
+                }
+                *previous = workflow;
+            } else {
+                next.workflows.push(workflow);
+            }
+        }
+        next.validate()?;
+        self.archived_history = next;
+        self.project_dirty = true;
+        self.revision += 1;
+        Ok(())
     }
 
     pub fn open_recovery(path: &Path) -> Result<Self> {
@@ -1511,6 +1595,8 @@ impl Document {
         expanded
     }
     pub fn save(&mut self, destination: &Path) -> Result<()> {
+        let normalized = project::save_path(destination)?;
+        let destination = normalized.as_path();
         let absolute = if destination.exists() {
             fs::canonicalize(destination)?
         } else {
@@ -1532,6 +1618,7 @@ impl Document {
         self.disk_bytes = Some(self.write_archive(destination, true)?);
         self.path = Some(destination.to_path_buf());
         self.history.set_saved();
+        self.project_dirty = false;
         self.recovered = false;
         Ok(())
     }
@@ -1557,6 +1644,9 @@ impl Document {
             counts: self.counts.clone(),
         });
         snapshot.archive = self.archive.clone();
+        snapshot.manifest = self.manifest.clone();
+        snapshot.archived_history = self.archived_history.clone();
+        snapshot.project_dirty = self.project_dirty;
         snapshot.original = self.original.clone();
         snapshot.original_edges = self.original_edges.clone();
         snapshot.overview_excluded = self.overview_excluded.clone();
@@ -1571,8 +1661,15 @@ impl Document {
             .as_ref()
             .ok_or("此文档没有可保存的原始 PRG 数据")?;
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
+        let source = project::inspect(&mut archive)?.format;
+        let target = Format::for_destination(destination)?;
+        if target == Format::Prg
+            && (!self.archived_history.workflows.is_empty() || !self.manifest.extensions.is_empty())
+        {
+            return Err("项目含协作历史或扩展信息，请保存为 .mio 以保留完整内容".into());
+        }
         let mut stage = Vec::new();
-        archive.by_name("stage.msgpack")?.read_to_end(&mut stage)?;
+        archive.by_name(source.stage())?.read_to_end(&mut stage)?;
         let mut value = rmpv::decode::read_value(&mut Cursor::new(stage))?;
         let before: BTreeMap<_, _> = self.original.iter().map(|n| (n.id.as_str(), n)).collect();
         let after: BTreeMap<_, _> = self.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
@@ -1610,24 +1707,73 @@ impl Document {
         let mut temp = tempfile::NamedTempFile::new_in(parent)?;
         {
             let mut writer = zip::ZipWriter::new(temp.as_file_mut());
+            let mut names = HashSet::new();
+            if target == Format::Mio {
+                self.manifest.validate()?;
+                self.archived_history.validate()?;
+                writer.start_file(
+                    project::MANIFEST_ENTRY,
+                    zip::write::SimpleFileOptions::default(),
+                )?;
+                serde_json::to_writer(&mut writer, &self.manifest)?;
+                writer.start_file(
+                    project::HISTORY_ENTRY,
+                    zip::write::SimpleFileOptions::default(),
+                )?;
+                serde_json::to_writer(&mut writer, &self.archived_history)?;
+                names.insert(project::MANIFEST_ENTRY.to_owned());
+                names.insert(project::HISTORY_ENTRY.to_owned());
+            }
             for i in 0..archive.len() {
                 let file = archive.by_index(i)?;
-                if file.name() == "stage.msgpack" {
+                if file.name() == source.stage() {
+                    if !names.insert(target.stage().to_owned()) {
+                        return Err("重复画布条目".into());
+                    }
                     writer.start_file(
-                        "stage.msgpack",
+                        target.stage(),
                         zip::write::SimpleFileOptions::default()
                             .compression_method(zip::CompressionMethod::Deflated),
                     )?;
                     writer.write_all(&stage)?;
-                } else if !file.name().starts_with("attachments/") {
-                    writer.raw_copy_file(file)?;
+                } else if !file.name().starts_with(source.assets()) {
+                    if source == Format::Mio
+                        && matches!(
+                            file.name(),
+                            project::MANIFEST_ENTRY | project::HISTORY_ENTRY
+                        )
+                    {
+                        continue;
+                    }
+                    let name = match (source, target) {
+                        (Format::Prg, Format::Mio) => {
+                            format!("{}{name}", project::LEGACY_PREFIX, name = file.name())
+                        }
+                        (Format::Mio, Format::Prg) => file
+                            .name()
+                            .strip_prefix(project::LEGACY_PREFIX)
+                            .ok_or("项目包含 PRG 无法保留的扩展，请保存为 .mio")?
+                            .to_owned(),
+                        _ => file.name().to_owned(),
+                    };
+                    if target == Format::Mio {
+                        project::validate_entry_name(&name)?;
+                    }
+                    if !names.insert(name.clone()) {
+                        return Err(format!("重复项目条目：{name}").into());
+                    }
+                    writer.raw_copy_file_rename(file, name)?;
                 }
             }
             for (name, bytes) in &self.attachments {
-                writer.start_file(
-                    format!("attachments/{name}"),
-                    zip::write::SimpleFileOptions::default(),
-                )?;
+                let name = format!("{}{name}", target.assets());
+                if target == Format::Mio {
+                    project::validate_entry_name(&name)?;
+                }
+                if !names.insert(name.clone()) {
+                    return Err(format!("重复项目条目：{name}").into());
+                }
+                writer.start_file(name, zip::write::SimpleFileOptions::default())?;
                 writer.write_all(bytes)?;
             }
             writer.finish()?;
@@ -1639,6 +1785,13 @@ impl Document {
             return Err("保存往返校验不一致，原文件未修改".into());
         }
         let output_bytes = fs::read(temp.path())?;
+        if target == Format::Mio {
+            let contents =
+                project::inspect(&mut zip::ZipArchive::new(Cursor::new(&output_bytes))?)?;
+            if contents.manifest != self.manifest || contents.history != self.archived_history {
+                return Err("项目清单或协作历史往返校验不一致，原文件未修改".into());
+            }
+        }
         if replace {
             temp.persist(destination)?;
         } else {
@@ -4315,6 +4468,308 @@ mod tests {
             &Document::open(&path).unwrap().nodes,
             &doc.nodes
         ));
+    }
+
+    #[test]
+    fn project_bytes_decode_one_snapshot_after_the_disk_file_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("snapshot.prg");
+        let mut document = Document::blank().unwrap();
+        document.create_text_node([10.0, 20.0]).unwrap();
+        document
+            .attachments
+            .insert("source.txt".into(), b"original".to_vec());
+        document.save(&path).unwrap();
+        let bytes = fs::read(&path).unwrap();
+
+        document.create_text_node([30.0, 40.0]).unwrap();
+        document
+            .attachments
+            .insert("source.txt".into(), b"changed".to_vec());
+        document.save(&path).unwrap();
+
+        let snapshot = Graph::from_file(ProjectFile::from_bytes(&bytes).unwrap()).unwrap();
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert_eq!(snapshot.attachments["source.txt"], b"original");
+        let current = Document::open(&path).unwrap();
+        assert_eq!(current.nodes.len(), 2);
+        assert_eq!(current.attachments["source.txt"], b"changed");
+        assert_eq!(current.archive.as_ref(), current.disk_bytes.as_ref());
+        assert!(ProjectFile::from_bytes(&bytes[..bytes.len() / 2]).is_err());
+    }
+
+    #[test]
+    fn mio_conversion_roundtrips_identity_assets_and_unknown_data() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut document = small_document(directory.path());
+        let legacy = document.path.clone().unwrap();
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&legacy)
+            .unwrap();
+        let mut extra = zip::ZipWriter::new_append(file).unwrap();
+        extra
+            .start_file("manifest.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        extra
+            .write_all(br#"{"format":"third-party-extension"}"#)
+            .unwrap();
+        extra
+            .start_file("canvas/notes.bin", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        extra.write_all(b"opaque legacy data").unwrap();
+        extra.finish().unwrap();
+        document = Document::open(&legacy).unwrap();
+        let original = fs::read(document.path.as_ref().unwrap()).unwrap();
+        let id = document.project_id().to_owned();
+        document
+            .attachments
+            .insert("image.png".into(), vec![0, 255, 1]);
+        document
+            .manifest
+            .extensions
+            .insert("producerNote".into(), serde_json::json!({"keep": true}));
+        let path = directory.path().join("新项目.mio");
+        document.save(&path).unwrap();
+        assert_eq!(
+            fs::read(directory.path().join("original.prg")).unwrap(),
+            original
+        );
+
+        let mut zip = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
+        assert!(zip.by_name("stage.msgpack").is_err());
+        assert!(zip.by_name("canvas/stage.msgpack").is_ok());
+        assert_eq!(
+            project::read_entry(&mut zip, "extensions/legacy/manifest.json", 1024).unwrap(),
+            br#"{"format":"third-party-extension"}"#
+        );
+        assert_eq!(
+            project::read_entry(&mut zip, "extensions/legacy/canvas/notes.bin", 1024).unwrap(),
+            b"opaque legacy data"
+        );
+        assert_eq!(
+            project::read_entry(&mut zip, "extensions/legacy/unknown.bin", 1024).unwrap(),
+            [0, 255, 4, 128]
+        );
+        assert_eq!(
+            project::read_entry(&mut zip, "assets/image.png", 1024).unwrap(),
+            [0, 255, 1]
+        );
+        drop(zip);
+
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let mut zip = zip::ZipWriter::new_append(file).unwrap();
+        zip.start_file(
+            "extensions/future/data.bin",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(&[7, 0, 128]).unwrap();
+        zip.finish().unwrap();
+
+        let mut reopened = Document::open(&path).unwrap();
+        assert_eq!(reopened.project_id(), id);
+        assert_eq!(reopened.manifest, document.manifest);
+        assert_eq!(reopened.attachments, document.attachments);
+        assert!(same_nodes(&reopened.nodes, &document.nodes));
+        let node_id = reopened.nodes[0].id.clone();
+        reopened.edit_text(&node_id, "更新后的画布".into(), [100.0, 80.0]);
+        let copy = directory.path().join("另存副本.mio");
+        reopened.save(&copy).unwrap();
+        let again = Document::open(&copy).unwrap();
+        assert_eq!(again.project_id(), id);
+        assert_eq!(again.nodes[0].text, "更新后的画布");
+        assert_eq!(again.manifest, document.manifest);
+        let mut zip = zip::ZipArchive::new(fs::File::open(copy).unwrap()).unwrap();
+        assert_eq!(
+            project::read_entry(&mut zip, "extensions/future/data.bin", 1024).unwrap(),
+            [7, 0, 128]
+        );
+        assert_eq!(
+            project::read_entry(&mut zip, "extensions/legacy/unknown.bin", 1024).unwrap(),
+            [0, 255, 4, 128]
+        );
+        let parsed = ProjectFile::load(&path).unwrap();
+        assert_eq!(
+            parsed.objects()["original-edge"]["unknown"],
+            serde_json::json!({"keep": [1, 2, 3]})
+        );
+        assert!(reopened.save(&directory.path().join("lossy.prg")).is_err());
+    }
+
+    #[test]
+    fn mio_history_is_portable_and_updates_do_not_remove_other_workflows() {
+        use crate::project_history::ArchivedWorkflow;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("协作.mio");
+        let mut document = Document::blank().unwrap();
+        let workflow = |id: &str, goal: &str| ArchivedWorkflow {
+            id: id.into(),
+            goal: goal.into(),
+            model: "test/model".into(),
+            files: vec![],
+            plan: None,
+            draft_plan: None,
+            runs: vec![],
+        };
+        let history = |workflows| History {
+            schema_version: 1,
+            workflows,
+        };
+        document
+            .attach_history(history(vec![
+                workflow("one", "original"),
+                workflow("two", "keep"),
+            ]))
+            .unwrap();
+        assert!(document.dirty());
+        document.save(&path).unwrap();
+        assert!(!document.dirty());
+        document
+            .attach_history(history(vec![workflow("one", "updated")]))
+            .unwrap();
+        // Canvas undo does not rewrite collaboration evidence or clear its dirty flag.
+        document.undo();
+        assert!(document.dirty());
+        assert_eq!(document.history_archive().workflows.len(), 2);
+        let recovery = directory.path().join("recovery.mio");
+        document
+            .capture_snapshot()
+            .unwrap()
+            .save_snapshot(&recovery)
+            .unwrap();
+        let recovered = Document::open_recovery(&recovery).unwrap();
+        assert_eq!(recovered.project_id(), document.project_id());
+        assert_eq!(recovered.history_archive(), document.history_archive());
+        assert!(recovered.dirty());
+        assert!(recovered.path.is_none());
+        let old_path = directory.path().join("do-not-overwrite.prg");
+        fs::write(&old_path, b"existing file").unwrap();
+        assert!(document.save(&old_path).is_err());
+        assert_eq!(fs::read(old_path).unwrap(), b"existing file");
+        document.save(&path).unwrap();
+        assert_eq!(
+            Document::open(&path).unwrap().history_archive(),
+            document.history_archive()
+        );
+        fs::write(&path, b"external change").unwrap();
+        assert!(document.save(&path).is_err());
+        assert_eq!(fs::read(path).unwrap(), b"external change");
+    }
+
+    #[test]
+    fn mio_future_or_incomplete_files_cannot_replace_a_session() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut session = crate::session::Session::new().unwrap();
+        session
+            .execute(crate::session::Command::AddText { x: 0.0, y: 0.0 })
+            .unwrap();
+        let original_id = session.project_id().to_owned();
+        for (schema, history, unsafe_entry) in
+            [(2, true, false), (1, false, false), (1, true, true)]
+        {
+            let path = directory.path().join("invalid.mio");
+            let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+            let manifest = Manifest {
+                schema_version: schema,
+                ..Default::default()
+            };
+            zip.start_file(
+                project::MANIFEST_ENTRY,
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            serde_json::to_writer(&mut zip, &manifest).unwrap();
+            zip.start_file(
+                Format::Mio.stage(),
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(&[0x90]).unwrap();
+            if history {
+                zip.start_file(
+                    project::HISTORY_ENTRY,
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
+                serde_json::to_writer(&mut zip, &History::default()).unwrap();
+            }
+            if unsafe_entry {
+                zip.start_file(
+                    "assets/../outside",
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
+            }
+            zip.finish().unwrap();
+            let before = fs::read(&path).unwrap();
+            assert!(
+                session
+                    .execute(crate::session::Command::Open {
+                        path: path.to_string_lossy().into(),
+                        discard: true
+                    })
+                    .is_err()
+            );
+            assert_eq!(session.project_id(), original_id);
+            assert_eq!(session.snapshot().nodes.len(), 1);
+            assert!(session.snapshot().dirty);
+            assert_eq!(fs::read(path).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn new_project_without_an_extension_is_saved_as_mio() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut document = Document::blank().unwrap();
+        let id = document.project_id().to_owned();
+        document.save(&directory.path().join("未命名项目")).unwrap();
+        let path = directory.path().join("未命名项目.mio");
+        assert_eq!(document.path.as_deref(), Some(path.as_path()));
+        assert_eq!(Document::open(&path).unwrap().project_id(), id);
+        assert!(!document.dirty());
+    }
+
+    #[test]
+    fn mio_archive_updates_reject_stale_or_conflicting_fixed_runs() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut document = Document::blank().unwrap();
+        let run = serde_json::json!({
+            "id":"first", "taskId":"$plan", "status":"succeeded", "createdAt":1,
+            "finishedAt":2, "sources":[], "prompt":"fixed input", "inputFiles":[],
+            "output":"fixed result", "proposal":null, "error":null, "review":null,
+            "usage":null, "retryOf":null
+        });
+        let mut second = run.clone();
+        second["id"] = "second".into();
+        let history: History = serde_json::from_value(serde_json::json!({
+            "schemaVersion":1,
+            "workflows":[{"id":"workflow", "goal":"preserve evidence", "model":"test/model",
+                "files":[], "plan":null, "draftPlan":null, "runs":[run,second]}]
+        }))
+        .unwrap();
+        document.attach_history(history.clone()).unwrap();
+        document
+            .save(&directory.path().join("evidence.mio"))
+            .unwrap();
+        let mut stale = history.clone();
+        stale.workflows[0].runs.pop();
+        assert!(document.attach_history(stale).is_err());
+        let mut conflicting = history.clone();
+        conflicting.workflows[0].runs[0].output = "different result".into();
+        assert!(document.attach_history(conflicting).is_err());
+        assert_eq!(document.history_archive(), &history);
+        assert!(!document.dirty());
+        let mut reviewed = history;
+        reviewed.workflows[0].runs[0].review = Some("approved".into());
+        document.attach_history(reviewed.clone()).unwrap();
+        assert_eq!(document.history_archive(), &reviewed);
+        assert!(document.dirty());
     }
 
     #[test]

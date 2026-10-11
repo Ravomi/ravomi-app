@@ -13,6 +13,7 @@ async function desktop(page: Page) {
     testWindow.isTauri = true;
     testWindow.commands = [];
     const snapshot = {
+      projectId: 'editor-project', documentToken: 'editor-document', archivedWorkflowCount: 0,
       title: '很长的中文文件名——项目探索与想法整理.prg', path: '/test.prg',
       dirty: false, canUndo: false, canRedo: false,
       nodes: [{ id: 'node-1', kind: 'TextNode', text: '原始想法', rect: [0, 0, 100, 50], editable: true }],

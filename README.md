@@ -207,3 +207,7 @@ Read the [development conventions](AGENTS.md) before contributing. Keep independ
 Ravomi is developed by Arcraven and builds on parts of the Project Graph / Graplu prototypes and their `.prg` compatibility conventions. We thank the upstream authors, open-source dependency maintainers, and everyone contributing code, design, documentation, and tests. See [MIGRATION](MIGRATION.md) for source and migration records, and [CREDITS](CREDITS.md) for the full acknowledgments index.
 
 The project is licensed under [GPL-3.0-only](LICENSE). Third-party components retain their own copyright notices and licenses. See [BRAND](assets/branding/BRAND.md) for brand asset information.
+
+## Native project files
+
+New Ravomi projects use `.mio`: a versioned ZIP package containing the canvas, assets, and explicitly selected collaboration history. Existing `.prg` drawings remain supported through compatibility loading and saving. Opening a project never resumes archived runs; local execution records remain separate. See the [storage specification](STORAGE.md) for the package layout, conversion rules, and current limits.

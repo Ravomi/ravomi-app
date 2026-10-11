@@ -5,8 +5,11 @@ pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 pub mod collaboration;
 pub mod document;
 pub mod edit_protocol;
+pub mod project;
+pub mod project_history;
 pub mod recovery;
 pub mod session;
+pub mod storage;
 
 pub struct ProjectFile {
     pub stage: Value,
@@ -15,12 +18,20 @@ pub struct ProjectFile {
 
 impl ProjectFile {
     pub fn load(path: &Path) -> Result<Self> {
-        let mut archive = zip::ZipArchive::new(File::open(path)?)?;
-        let mut stage_bytes = Vec::new();
-        archive
-            .by_name("stage.msgpack")?
-            .take(128 * 1024 * 1024)
-            .read_to_end(&mut stage_bytes)?;
+        Self::read(File::open(path)?)
+    }
+
+    /// Decode the same snapshot that the document retains for lossless saving
+    /// and external-change detection, without reopening a mutable disk path.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        Self::read(std::io::Cursor::new(bytes))
+    }
+
+    fn read(reader: impl Read + std::io::Seek) -> Result<Self> {
+        let mut archive = zip::ZipArchive::new(reader)?;
+        let contents = project::inspect(&mut archive)?;
+        let stage_bytes =
+            project::read_entry(&mut archive, contents.format.stage(), 128 * 1024 * 1024)?;
         let stage: Value = rmp_serde::from_slice(&stage_bytes)?;
         if !stage.is_array() {
             return Err("stage.msgpack must contain an array".into());
@@ -28,7 +39,7 @@ impl ProjectFile {
         let mut attachments = BTreeMap::new();
         for index in 0..archive.len() {
             let entry = archive.by_index(index)?;
-            if let Some(name) = entry.name().strip_prefix("attachments/") {
+            if let Some(name) = entry.name().strip_prefix(contents.format.assets()) {
                 let name = name.to_owned();
                 if entry.size() > 64 * 1024 * 1024 {
                     return Err("Attachment exceeds 64 MiB".into());

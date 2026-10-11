@@ -9,6 +9,7 @@ import avatar from '../../assets/branding/ravomi-avatar.png';
 import appIcon from '../../assets/branding/app-icons/128x128.png';
 
 const empty: Snapshot = {
+  projectId: '', documentToken: '', archivedWorkflowCount: 0,
   title: '未命名画布', path: null, dirty: false, canUndo: false,
   canRedo: false, nodes: [], edgeCount: 0,
 };
@@ -94,7 +95,7 @@ export function App() {
     if (unsaved && !await discard('当前画布尚未保存。继续将放弃更改。')) return;
     if (kind === 'new') await command({ type: 'new', discard: true });
     else {
-      const path = await open({ multiple: false, filters: [{ name: '画布文档', extensions: ['prg'] }] });
+      const path = await open({ multiple: false, filters: [{ name: 'Ravomi 项目与兼容画布', extensions: ['mio', 'prg'] }] });
       if (!path) return;
       await command({ type: 'open', path, discard: true });
     }
@@ -110,8 +111,8 @@ export function App() {
   async function saveDocument(copy: boolean) {
     await applyDraft();
     const path = !copy && document.path ? document.path : await save({
-      defaultPath: document.path ?? '未命名画布.prg',
-      filters: [{ name: '画布文档', extensions: ['prg'] }],
+      defaultPath: document.path?.replace(/\.prg$/i, '.mio') ?? '未命名项目.mio',
+      filters: [{ name: 'Ravomi 项目 (.mio)', extensions: ['mio'] }, { name: '兼容画布 (.prg)', extensions: ['prg'] }],
     });
     if (!path) return;
     await command({ type: 'save', path });
@@ -175,7 +176,7 @@ export function App() {
 
     {!native && <p className="banner">当前为浏览器预览。文档编辑暂在桌面应用中使用，浏览器版仍在开发。</p>}
     {error && <div className="banner error" role="alert"><span>{error}</span><button onClick={() => setError('')}>关闭提示</button></div>}
-    {view === 'collaboration' ? <Collaboration /> : <main>
+    {view === 'collaboration' ? <Collaboration currentProject={document} projectBusy={busy} runProjectAction={run} onProjectChange={next => setDocument(current => current.projectId === next.projectId && current.documentToken === next.documentToken ? next : current)} /> : <main>
       <section className="workspace" id="workspace" aria-label="画布对象" tabIndex={-1}>
         <div className="workspace-heading"><div><p className="eyebrow">YOUR SPACE, YOUR IDEAS</p><h1>让灵感安静生长</h1><p className="hero-description">记录、连接，逐步展开你的工作。</p>
           <button className="primary" disabled={disabled} onClick={() => void run(addText)}><Icon name="plus" />新建文字</button></div>

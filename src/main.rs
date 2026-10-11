@@ -12,7 +12,7 @@ fn main() -> Result<()> {
         args.push("--home".into());
         return viewer::run_home(&args);
     }
-    let path = args.first().ok_or("Usage: project-graph-bevy-canvas FILE.prg [--inspect] [--benchmark] [--font FONT.ttf] [--output results.json]")?;
+    let path = args.first().ok_or("Usage: project-graph-bevy-canvas FILE.mio|FILE.prg [--inspect] [--benchmark] [--font FONT.ttf] [--output results.json]")?;
     let file = ProjectFile::load(Path::new(&path))?;
     let graph = Graph::from_file(file)?;
     println!(

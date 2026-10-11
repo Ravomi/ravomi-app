@@ -29,6 +29,10 @@ desktop-file-install --dir="$data_dir/applications" \
     --set-key=Exec --set-value="\"$exec_path\" %f" \
     "$project_dir/packaging/linux/io.github.graphif.Graplu.desktop"
 desktop-file-validate "$data_dir/applications/io.github.graphif.Graplu.desktop"
+command -v update-mime-database >/dev/null
+install -Dm644 "$project_dir/packaging/linux/project-graph.xml" \
+    "$data_dir/mime/packages/project-graph-bevy.xml"
+update-mime-database "$data_dir/mime"
 update-desktop-database "$data_dir/applications"
 if command -v gtk-update-icon-cache >/dev/null; then
     gtk-update-icon-cache -f -t "$data_dir/icons/hicolor"

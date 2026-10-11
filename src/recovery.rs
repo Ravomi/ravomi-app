@@ -1,4 +1,11 @@
-use crate::{Result, document::Document};
+use crate::{
+    Result,
+    document::Document,
+    storage::{
+        self, LEGACY_RECOVERY_DOCUMENT_NAME, RECOVERY_DOCUMENT_NAME, RECOVERY_ENTRY_NAME,
+        RECOVERY_SETTINGS_NAME,
+    },
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -40,7 +47,7 @@ impl Policy {
     }
 
     pub fn load(directory: &Path) -> Result<Self> {
-        let file = match fs::File::open(directory.join("settings.json")) {
+        let file = match fs::File::open(directory.join(RECOVERY_SETTINGS_NAME)) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Self::default());
@@ -55,11 +62,10 @@ impl Policy {
     pub fn save(&self, directory: &Path) -> Result<()> {
         self.validate()?;
         fs::create_dir_all(directory)?;
-        let file = tempfile::NamedTempFile::new_in(directory)?;
-        serde_json::to_writer(file.as_file(), self)?;
-        file.as_file().sync_all()?;
-        file.persist(directory.join("settings.json"))?;
-        Ok(())
+        storage::atomic_write(&directory.join(RECOVERY_SETTINGS_NAME), |file| {
+            serde_json::to_writer(file, self)?;
+            Ok(())
+        })
     }
 }
 
@@ -99,11 +105,9 @@ pub fn discover(root: &Path) -> Result<Catalog> {
                 }
                 let read = || -> Result<Entry> {
                     let metadata = serde_json::from_reader(fs::File::open(
-                        generation.path().join("entry.json"),
+                        generation.path().join(RECOVERY_ENTRY_NAME),
                     )?)?;
-                    if !generation.path().join("document.prg").is_file() {
-                        return Err("缺少恢复文档".into());
-                    }
+                    document_path(&generation.path())?;
                     Ok(metadata)
                 };
                 match read() {
@@ -122,11 +126,21 @@ pub fn discover(root: &Path) -> Result<Catalog> {
 }
 
 pub fn root() -> Result<PathBuf> {
-    std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".local/state")))
-        .map(|p| p.join("graplu/recovery"))
-        .ok_or_else(|| "无法确定恢复副本目录".into())
+    storage::recovery_root().ok_or_else(|| "无法确定恢复副本目录".into())
+}
+
+/// Prefer the native snapshot; legacy PRG generations remain recoverable.
+pub fn document_path(generation: &Path) -> Result<PathBuf> {
+    for name in [RECOVERY_DOCUMENT_NAME, LEGACY_RECOVERY_DOCUMENT_NAME] {
+        let path = generation.join(name);
+        match fs::metadata(&path) {
+            Ok(metadata) if metadata.is_file() => return Ok(path),
+            Ok(_) => return Err("恢复文档不是普通文件".into()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Err("缺少恢复文档".into())
 }
 
 pub fn remove(root: &Path, generation: &Path) -> Result<()> {
@@ -168,7 +182,7 @@ pub fn remove(root: &Path, generation: &Path) -> Result<()> {
         let item = item?;
         if !matches!(
             item.file_name().to_str(),
-            Some("document.prg" | "entry.json")
+            Some(RECOVERY_DOCUMENT_NAME | LEGACY_RECOVERY_DOCUMENT_NAME | RECOVERY_ENTRY_NAME)
         ) || !item.file_type()?.is_file()
         {
             return Err("副本目录包含额外内容，未执行删除".into());
@@ -178,7 +192,7 @@ pub fn remove(root: &Path, generation: &Path) -> Result<()> {
     Ok(())
 }
 
-/// A generation becomes discoverable only after both its PRG and metadata exist.
+/// A generation becomes discoverable only after both its project and metadata exist.
 pub fn write(document: &Document, directory: &Path) -> Result<PathBuf> {
     write_with_policy(document, directory, &Policy::default())
 }
@@ -191,13 +205,13 @@ pub fn write_with_policy(
     policy.validate()?;
     fs::create_dir_all(directory)?;
     let pending = tempfile::tempdir_in(directory)?;
-    document.save_snapshot(&pending.path().join("document.prg"))?;
+    document.save_snapshot(&pending.path().join(RECOVERY_DOCUMENT_NAME))?;
     let metadata = Entry {
         source: document.path.clone(),
         revision: document.revision,
         created_ms: SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
     };
-    let file = fs::File::create(pending.path().join("entry.json"))?;
+    let file = fs::File::create(pending.path().join(RECOVERY_ENTRY_NAME))?;
     serde_json::to_writer(&file, &metadata)?;
     file.sync_all()?;
     let destination = directory.join(uuid::Uuid::new_v4().to_string());
@@ -226,7 +240,9 @@ pub fn list(directory: &Path) -> Result<Vec<(PathBuf, Entry)>> {
         {
             continue;
         }
-        let metadata = serde_json::from_reader(fs::File::open(item.path().join("entry.json"))?)?;
+        let metadata =
+            serde_json::from_reader(fs::File::open(item.path().join(RECOVERY_ENTRY_NAME))?)?;
+        document_path(&item.path())?;
         result.push((item.path(), metadata));
     }
     result.sort_by_key(|(_, entry): &(PathBuf, Entry)| std::cmp::Reverse(entry.created_ms));
@@ -236,6 +252,29 @@ pub fn list(directory: &Path) -> Result<Vec<(PathBuf, Entry)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_generations_take_precedence_and_legacy_generations_still_restore() {
+        let root = tempfile::tempdir().unwrap();
+        let tab = root.path().join(uuid::Uuid::new_v4().to_string()).join("1");
+        let mut document = Document::blank().unwrap();
+        document.create_text_node([0.0; 2]).unwrap();
+        let generation = write(&document, &tab).unwrap();
+        let native = generation.join(RECOVERY_DOCUMENT_NAME);
+        let legacy = generation.join(LEGACY_RECOVERY_DOCUMENT_NAME);
+        document.save_snapshot(&legacy).unwrap();
+        assert_eq!(document_path(&generation).unwrap(), native);
+        fs::remove_file(native).unwrap();
+        assert_eq!(document_path(&generation).unwrap(), legacy);
+        assert_eq!(discover(root.path()).unwrap().entries.len(), 1);
+        assert_eq!(list(&tab).unwrap().len(), 1);
+        let restored = Document::open_recovery(&legacy).unwrap();
+        assert_eq!(restored.nodes.len(), 1);
+        assert!(restored.path.is_none());
+        assert!(restored.dirty());
+        remove(root.path(), &generation).unwrap();
+        assert!(!generation.exists());
+    }
 
     #[test]
     fn deleting_one_generation_keeps_other_sessions_and_rejects_unrelated_paths() {
@@ -252,7 +291,7 @@ mod tests {
             &root.path().join(uuid::Uuid::new_v4().to_string()).join("1"),
         )
         .unwrap();
-        let bytes = fs::read(second.join("document.prg")).unwrap();
+        let bytes = fs::read(document_path(&second).unwrap()).unwrap();
         assert!(remove(root.path(), root.path()).is_err());
         assert!(remove(root.path(), first.parent().unwrap()).is_err());
         assert!(remove(root.path(), &first.join("../elsewhere")).is_err());
@@ -263,7 +302,7 @@ mod tests {
         remove(root.path(), &first).unwrap();
         remove(root.path(), &first).unwrap();
         assert!(!first.exists());
-        assert_eq!(fs::read(second.join("document.prg")).unwrap(), bytes);
+        assert_eq!(fs::read(document_path(&second).unwrap()).unwrap(), bytes);
         assert_eq!(discover(root.path()).unwrap().entries.len(), 1);
     }
 
@@ -279,7 +318,7 @@ mod tests {
         std::os::unix::fs::symlink(outside.path(), &session).unwrap();
         let alias = session.join("1").join(generation.file_name().unwrap());
         assert!(remove(root.path(), &alias).is_err());
-        assert!(generation.join("document.prg").exists());
+        assert!(generation.join(RECOVERY_DOCUMENT_NAME).exists());
     }
 
     #[test]
@@ -325,7 +364,7 @@ mod tests {
         let catalog = discover(root.path()).unwrap();
         assert_eq!(catalog.entries.len(), 1);
         assert_eq!(catalog.errors.len(), 1);
-        let source = generation.join("document.prg");
+        let source = document_path(&generation).unwrap();
         let bytes = fs::read(&source).unwrap();
         let mut restored = Document::open_recovery(&source).unwrap();
         assert!(restored.path.is_none());
@@ -348,7 +387,7 @@ mod tests {
         doc.create_text_node([500.0; 2]).unwrap();
         let path = write(&snapshot, directory.path()).unwrap();
         assert_eq!(
-            Document::open(&path.join("document.prg"))
+            Document::open(&document_path(&path).unwrap())
                 .unwrap()
                 .nodes
                 .len(),

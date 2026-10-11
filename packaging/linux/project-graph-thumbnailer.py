@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Render a bounded, offline overview of a PRG; never execute document content."""
+"""Render an offline MIO/PRG overview; never execute document content."""
 
 import argparse
 import io
@@ -678,14 +678,40 @@ def render(input_path, output, requested_size, requested_height=None):
             if len(archive.infolist()) > 10000:
                 raise ValueError("Too many archive entries")
             attachments = {}
-            if "stage.json" in archive.namelist():
+            names = archive.namelist()
+            stage_entry = "stage.msgpack"
+            assets_prefix = "attachments/"
+            is_mio = "manifest.json" in names
+            if is_mio:
+                import uuid
+
+                manifest = json.loads(archive_bytes(archive, "manifest.json", 65536))
+                if (
+                    not isinstance(manifest, dict)
+                    or manifest.get("format") != "ravomi-project"
+                    or type(manifest.get("schemaVersion")) is not int
+                    or manifest.get("schemaVersion") != 1
+                    or type(manifest.get("canvasSchemaVersion")) is not int
+                    or manifest.get("canvasSchemaVersion") != 1
+                    or manifest.get("requiredFeatures", []) != []
+                    or not isinstance(manifest.get("projectId"), str)
+                ):
+                    raise ValueError("Unsupported Ravomi project format or version")
+                uuid.UUID(manifest.get("projectId", ""))
+                if len(names) != len(set(names)):
+                    raise ValueError("Duplicate Ravomi project entries")
+                stage_entry = "canvas/stage.msgpack"
+                assets_prefix = "assets/"
+                if stage_entry not in names:
+                    raise ValueError("Missing Ravomi canvas stage")
+            if not is_mio and "stage.json" in names:
                 graph = json.loads(archive_bytes(archive, "stage.json"))
-            elif "stage.msgpack" in archive.namelist():
+            elif stage_entry in names:
                 import msgpack
 
                 graph = legacy_graph(
                     msgpack.unpackb(
-                        archive_bytes(archive, "stage.msgpack"),
+                        archive_bytes(archive, stage_entry),
                         max_str_len=MAX_JSON,
                         max_array_len=300000,
                         max_map_len=300000,
@@ -695,13 +721,13 @@ def render(input_path, output, requested_size, requested_height=None):
                     identifier = obj["properties"].get("preview_attachment")
                     if not identifier:
                         continue
-                    for name in archive.namelist():
-                        if name.startswith("attachments/" + identifier + "."):
+                    for name in names:
+                        if name.startswith(assets_prefix + identifier + "."):
                             attachments[identifier] = image_surface(
                                 archive_bytes(archive, name), name.rsplit(".", 1)[-1]
                             )
                             break
-            elif "thumbnail.png" in archive.namelist():
+            elif "thumbnail.png" in names:
                 original = image_surface(archive_bytes(archive, "thumbnail.png"), "png")
                 surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, canvas_height)
                 ctx = cairo.Context(surface)
@@ -1137,7 +1163,7 @@ def render(input_path, output, requested_size, requested_height=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", help="saved .prg document")
+    parser.add_argument("source", help="saved .mio project or .prg document")
     parser.add_argument("output", help="destination PNG")
     parser.add_argument("size", type=int, help="requested thumbnail size in pixels")
     parser.add_argument(
