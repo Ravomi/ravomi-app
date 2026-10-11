@@ -175,21 +175,71 @@ fn canvas_only_workflow_runs_and_survives_mio_without_external_project() {
         w.runs.len() == 5 && w.runs.iter().all(|r| r.status == Status::Succeeded)
     });
     let mut doc = Document::blank().unwrap();
+    let input = doc.create_text_node([0.0, 0.0]).unwrap();
+    doc.graph.nodes[input].text = "讲解 Pi Agent".into();
     let mut bindings = canvas::Bindings::default();
     bindings.workflows.push(canvas::Binding {
         workflow_id: id,
-        input_ids: vec![],
-        anchor: [0.0, 0.0],
+        input_ids: vec![doc.nodes[input].id.clone()],
+        anchor: [360.0, 0.0],
         agents: vec![],
+        answer_maps: vec![],
     });
-    bindings
-        .sync(&mut doc, &runtime.snapshot().unwrap())
+    let mut snapshot = runtime.snapshot().unwrap();
+    for run in &mut snapshot.workflows[0].runs {
+        if let Some(proposal) = &mut run.proposal {
+            proposal.summary =
+                "- 定义\n  - 一个代码助手\n- 使用\n  - 提交目标\n  - 查看结果".into();
+        }
+    }
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert!(bindings.workflows[0].agents.is_empty());
+    assert_eq!(bindings.workflows[0].answer_maps.len(), 4);
+    let map = &bindings.workflows[0].answer_maps[0];
+    assert_eq!(map.node_ids.len(), 5);
+    let root = doc
+        .nodes
+        .iter()
+        .position(|n| n.id == map.node_ids[0])
         .unwrap();
+    let child = doc
+        .nodes
+        .iter()
+        .position(|n| n.id == map.node_ids[1])
+        .unwrap();
+    assert!(doc.edges.iter().any(|e| e.members == [input, root]));
+    assert!(doc.edges.iter().any(|e| e.members == [root, child]));
+    assert!(doc.nodes.iter().all(|n| !n.text.contains("任务规划")));
+    if let Some(path) = std::env::var_os("RAVOMI_MINDMAP_FIXTURE") {
+        doc.save(Path::new(&path)).unwrap();
+    }
+    assert_eq!(
+        bindings
+            .selected_runs(&doc, &std::collections::HashSet::from([child]), &snapshot)
+            .len(),
+        1
+    );
+    doc.graph.nodes[child].text = "用户改写的内容".into();
+    doc.delete_objects(
+        &std::collections::HashSet::from([root]),
+        &Default::default(),
+    )
+    .unwrap();
+    let count = doc.nodes.len();
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert_eq!(doc.nodes.len(), count);
+    assert!(doc.nodes.iter().any(|n| n.text == "用户改写的内容"));
     let destination = storage.path().join("canvas.mio");
     doc.save(&destination).unwrap();
     drop(runtime);
     fs::remove_file(storage.path().join("workflows.json")).unwrap();
     let restored = Document::open(&destination).unwrap();
+    assert_eq!(
+        canvas::Bindings::read(&restored).unwrap().workflows[0]
+            .answer_maps
+            .len(),
+        4
+    );
     assert_eq!(restored.history_archive(), doc.history_archive());
     assert_eq!(restored.history_archive().workflows[0].runs.len(), 5);
     assert!(
@@ -275,6 +325,7 @@ fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_version
         input_ids: ids,
         anchor,
         agents: vec![],
+        answer_maps: vec![],
     });
     let snapshot = runtime.snapshot().unwrap();
     bindings.sync(&mut doc, &snapshot).unwrap();

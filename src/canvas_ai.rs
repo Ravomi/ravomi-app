@@ -252,6 +252,7 @@ impl State {
                         input_ids: pending.ids,
                         anchor: pending.anchor,
                         agents: vec![],
+                        answer_maps: vec![],
                     });
                     let mut selected = self.connected_snapshot(target, &snapshot)?;
                     selected.workflows.retain(|workflow| workflow.id != w.id);
@@ -750,6 +751,7 @@ mod tests {
             input_ids: vec![],
             anchor: [0.0; 2],
             agents: vec![],
+            answer_maps: vec![],
         });
         bindings.write(doc).unwrap();
     }
@@ -882,6 +884,7 @@ mod tests {
             input_ids: vec![],
             anchor: [f32::MAX, f32::MAX],
             agents: vec![],
+            answer_maps: vec![],
         });
         bindings.write(&mut doc).unwrap();
         doc.save(&path).unwrap();

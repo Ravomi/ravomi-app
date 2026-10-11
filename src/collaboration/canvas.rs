@@ -2,6 +2,7 @@
 use super::*;
 use crate::document::Document;
 use std::collections::HashSet;
+mod mind_map;
 
 const ATTACHMENT: &str = "ravomi-code-agents.json";
 
@@ -15,6 +16,13 @@ pub struct Binding {
     pub input_ids: Vec<String>,
     pub anchor: [f32; 2],
     pub agents: Vec<Agent>,
+    #[serde(default)]
+    pub answer_maps: Vec<AnswerMap>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AnswerMap {
+    pub run_id: String,
+    pub node_ids: Vec<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Agent {
@@ -51,8 +59,16 @@ impl Bindings {
     fn generated(&self) -> HashSet<&str> {
         self.workflows
             .iter()
-            .flat_map(|w| &w.agents)
-            .flat_map(|a| [a.group_id.as_str(), a.log_id.as_str()])
+            .flat_map(|w| {
+                w.agents
+                    .iter()
+                    .flat_map(|a| [a.group_id.as_str(), a.log_id.as_str()])
+                    .chain(
+                        w.answer_maps
+                            .iter()
+                            .flat_map(|map| map.node_ids.iter().map(String::as_str)),
+                    )
+            })
             .collect()
     }
     pub fn capture(
@@ -123,7 +139,10 @@ impl Bindings {
                         w.runs
                             .iter()
                             .filter(|r| {
-                                b.agents.iter().any(|a| {
+                                b.answer_maps.iter().any(|map| {
+                                    map.run_id == r.id
+                                        && map.node_ids.iter().any(|id| ids.contains(id.as_str()))
+                                }) || b.agents.iter().any(|a| {
                                     a.task_id == r.task_id
                                         && (ids.contains(a.group_id.as_str())
                                             || ids.contains(a.log_id.as_str()))
@@ -149,12 +168,24 @@ impl Bindings {
                 .iter()
                 .find(|workflow| workflow.id == binding.workflow_id)
                 .is_some_and(|workflow| {
-                    tasks(workflow)
-                        .iter()
-                        .any(|(id, _, _)| !binding.agents.iter().any(|agent| &agent.task_id == id))
+                    !mind_map::eligible(workflow, binding)
+                        && tasks(workflow).iter().any(|(id, _, _)| {
+                            !binding.agents.iter().any(|agent| &agent.task_id == id)
+                        })
                 })
         });
-        if creates_nodes {
+        let creates_maps = self.workflows.iter().any(|binding| {
+            snapshot.workflows.iter().any(|w| {
+                w.id == binding.workflow_id
+                    && mind_map::eligible(w, binding)
+                    && w.runs.iter().any(|run| {
+                        run.status == Status::Succeeded
+                            && run.proposal.is_some()
+                            && !binding.answer_maps.iter().any(|map| map.run_id == run.id)
+                    })
+            })
+        });
+        if creates_nodes || creates_maps {
             // Creation can fail on locked groups or invalid geometry. Validate the
             // entire projection on a detached copy before changing saved evidence.
             let mut staged = doc.capture_snapshot().map_err(|error| error.to_string())?;
@@ -190,6 +221,10 @@ impl Bindings {
             else {
                 continue;
             };
+            if mind_map::eligible(w, binding) {
+                mind_map::sync(doc, w, binding)?;
+                continue;
+            }
             for (task_id, title, parent) in tasks(w) {
                 if !binding.agents.iter().any(|a| a.task_id == task_id) {
                     let depth = w.plan.as_ref().map_or(1, |p| p.tasks.len());
