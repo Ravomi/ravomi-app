@@ -9,10 +9,14 @@ bin_dir="$HOME/.local/bin"
 test -x "$binary"
 command -v desktop-file-install >/dev/null
 command -v desktop-file-validate >/dev/null
-mkdir -p "$bin_dir" "$data_dir/applications" "$data_dir/icons/hicolor/scalable/apps"
+mkdir -p "$bin_dir" "$data_dir/applications"
 install -m 755 "$binary" "$bin_dir/graplu.new"
 mv -f "$bin_dir/graplu.new" "$bin_dir/graplu"
-install -m 644 "$project_dir/assets/branding/graplu-icon.svg" "$data_dir/icons/hicolor/scalable/apps/graplu.svg"
+for size in 32 128 256 512; do
+    icon_dir="$data_dir/icons/hicolor/${size}x${size}/apps"
+    mkdir -p "$icon_dir"
+    install -m 644 "$project_dir/assets/branding/app-icons/${size}x${size}.png" "$icon_dir/ravomi.png"
+done
 
 # Desktop Exec quoting has its own escaping rules, independent of shell quoting.
 exec_path="$bin_dir/graplu"

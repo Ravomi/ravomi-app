@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-    <key>CFBundleExecutable</key><string>Graplu</string>
-    <key>CFBundleIconFile</key><string>Graplu</string>
+    <key>CFBundleExecutable</key><string>Ravomi</string>
+    <key>CFBundleIconFile</key><string>Ravomi</string>
     <key>CFBundleIdentifier</key><string>io.github.graphif.Graplu</string>
     <key>CFBundleName</key><string>Ravomi</string>
     <key>CFBundleDisplayName</key><string>Ravomi</string>

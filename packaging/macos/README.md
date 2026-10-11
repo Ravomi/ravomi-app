@@ -12,7 +12,7 @@ bash packaging/macos/package.sh
 
 构建目标固定为 `aarch64-apple-darwin`，不启用特定 CPU 的指令集；适用于包括 M5 在内的 Apple Silicon。最低部署版本设为 macOS 13。输出位于 `target/macos-package/`，包含 DMG 和 SHA-256 文件。
 
-应用包包含原生可执行文件、图标、许可证与贡献者说明，DMG 提供拖入 Applications 的快捷方式。图标 PNG 当前从 `assets/branding/graplu-icon.svg` 导出，属于兼容资源；后续品牌替换必须同步源资源、PNG 和打包配置，并重新验证产物，不能仅改本文宣称已经采用新 Logo。
+应用包包含原生可执行文件、图标、许可证与贡献者说明，DMG 提供拖入 Applications 的快捷方式。打包脚本现在从 `assets/branding/app-icons/1024x1024.png` 生成团子猫 ICNS，包内可执行文件和图标均命名为 Ravomi；Bundle ID 保留兼容值。旧 `packaging/macos/icon-1024.png` 仅保留历史来源，不再被打包脚本引用。本轮在 Linux 修改并静态检查脚本，尚未重新构建或验收 macOS DMG。
 
 默认采用 ad-hoc 签名，脚本校验应用签名、Info.plist 和 DMG。未配置 Developer ID 签名或 Apple 公证。运行时使用 macOS 自带的 `Hiragino Sans GB.ttc`，也可通过 `--font` 指定其他字体。
 

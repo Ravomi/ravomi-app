@@ -348,6 +348,7 @@ pub fn run(graph: Document, args: &[String]) -> Result<()> {
             arg(args, "--preview-tool").as_deref() == Some("collapsed"),
         ))
         .add_systems(Startup, setup)
+        .add_systems(Update, editor::set_brand_window_icon)
         .add_systems(
             EguiPrimaryContextPass,
             (

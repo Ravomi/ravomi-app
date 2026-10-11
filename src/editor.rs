@@ -364,6 +364,37 @@ enum WindowAction {
     Pin,
 }
 
+pub fn set_brand_window_icon(
+    windows: Query<Entity, With<PrimaryWindow>>,
+    mut editor: ResMut<Editor>,
+    mut applied: Local<bool>,
+    _main_thread: bevy::ecs::system::NonSendMarker,
+) {
+    if *applied {
+        return;
+    }
+    let Ok(entity) = windows.single() else { return };
+    bevy::winit::WINIT_WINDOWS.with_borrow(|windows| {
+        let Some(window) = windows.get_window(entity) else {
+            return;
+        };
+        *applied = true;
+        let result =
+            image::load_from_memory(include_bytes!("../assets/branding/app-icons/128x128.png"))
+                .map_err(|error| error.to_string())
+                .and_then(|image| {
+                    let rgba = image.to_rgba8();
+                    let (width, height) = rgba.dimensions();
+                    winit::window::Icon::from_rgba(rgba.into_raw(), width, height)
+                        .map_err(|error| error.to_string())
+                });
+        match result {
+            Ok(icon) => window.set_window_icon(Some(icon)),
+            Err(error) => editor.error = Some(format!("窗口图标加载失败：{error}")),
+        }
+    });
+}
+
 pub fn apply_window_action(world: &mut World) {
     let Some(action) = world.resource_mut::<Editor>().window_action.take() else {
         return;
@@ -485,7 +516,7 @@ fn about_content(ui: &mut egui::Ui, light: bool) {
             .clicked()
         {
             ui.ctx().open_url(egui::OpenUrl::new_tab(
-                "https://github.com/Wang-Yang-source/H-M/releases",
+                "https://github.com/Ravomi/ravomi-app/releases",
             ));
         }
     });
@@ -515,10 +546,10 @@ fn about_content(ui: &mut egui::Ui, light: bool) {
                     ui.label("感谢参与项目及上游开发的贡献者");
                     ui.hyperlink_to(
                         "贡献者与致谢",
-                        "https://github.com/Wang-Yang-source/H-M/blob/main/CREDITS.md",
+                        "https://github.com/Ravomi/ravomi-app/blob/main/CREDITS.md",
                     );
                 } else {
-                    ui.hyperlink_to("Ravomi", "https://github.com/Wang-Yang-source/H-M");
+                    ui.hyperlink_to("Ravomi", "https://github.com/Ravomi/ravomi-app");
                 }
             });
     };
@@ -535,7 +566,7 @@ fn about_content(ui: &mut egui::Ui, light: bool) {
         egui::RichText::new("开源许可 · GPL-3.0-only")
             .size(12.0)
             .color(palette.muted),
-        "https://github.com/Wang-Yang-source/H-M/blob/main/LICENSE",
+        "https://github.com/Ravomi/ravomi-app/blob/main/LICENSE",
     );
 }
 
