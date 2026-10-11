@@ -687,6 +687,7 @@ pub fn ui(
         editor.report_error(e);
     }
     editor.capture |= ctx.egui_wants_pointer_input() || ctx.egui_wants_keyboard_input();
+    editor.navigation_capture |= ctx.egui_wants_pointer_input();
     if state.runtime.is_some() {
         ctx.request_repaint_after(Duration::from_millis(300));
     }

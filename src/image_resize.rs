@@ -44,6 +44,7 @@ pub fn ui(
         resize.drag = None;
         interaction.dirty = true;
         editor.capture = true;
+        editor.navigation_capture = true;
         return Ok(());
     }
     if !editor.canvas_resize_allowed() {
@@ -129,6 +130,7 @@ pub fn ui(
         scene.0.finish();
         interaction.dirty = true;
         editor.capture = true;
+        editor.navigation_capture = true;
     }
     let corners = [
         screen_rect.left_top(),
@@ -194,6 +196,7 @@ pub fn ui(
             scene.0.nodes[index].rect = scaled_rect(drag.rect, factor, anchor);
             interaction.dirty = true;
             editor.capture = true;
+            editor.navigation_capture = true;
             if response.drag_stopped() || !ctx.input(|i| i.pointer.primary_down()) {
                 scene.0.finish();
                 resize.drag = None;

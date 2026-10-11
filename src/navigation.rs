@@ -49,7 +49,7 @@ pub fn navigate(
     let mut gesture_events = gestures.read();
     let Some(cursor) = window
         .cursor_position()
-        .filter(|_| window.focused && !editor.capture && !config.benchmark)
+        .filter(|_| window.focused && !editor.navigation_capture && !config.benchmark)
     else {
         wheel_events.for_each(drop);
         gesture_events.for_each(drop);
@@ -126,10 +126,14 @@ pub fn navigate(
         match event.event {
             WindowEvent::PinchGesture {
                 phase: TouchPhase::Started,
+                delta,
                 ..
             } => {
                 wheel.cancel();
                 anchor.0 = Some(cursor);
+                if delta.is_finite() {
+                    zoom_at(cursor, window, transform, projection, delta as f32);
+                }
             }
             WindowEvent::PinchGesture {
                 delta,

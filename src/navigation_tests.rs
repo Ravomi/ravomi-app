@@ -201,6 +201,22 @@ fn pixel_pan_uses_logical_distance_at_each_dpi() {
 }
 
 #[test]
+fn keyboard_focus_does_not_swallow_canvas_pan_or_pinch_start() {
+    let mut h = Harness::new(1.75);
+    h.app.world_mut().resource_mut::<editor::Editor>().capture = true;
+    let before = h.anchor();
+    let delta = Vec2::new(12.0, -7.0);
+    h.wheel(h.window, MouseScrollUnit::Pixel, delta * 1.75);
+    h.app.update();
+    assert!(h.viewport(before).distance(h.cursor + delta) < 0.005);
+    let anchor = h.anchor();
+    h.raw_pinch(h.native, NativePhase::Started, 0.1);
+    h.app.update();
+    assert!((h.scale() - 4.0 * (-0.1_f32).exp()).abs() < 1e-5);
+    h.assert_anchor(anchor);
+}
+
+#[test]
 fn pinch_and_line_wheel_zoom_preserve_the_rendered_cursor_anchor() {
     for dpi in [1.0, 1.75, 2.0] {
         let mut h = Harness::new(dpi);
@@ -254,7 +270,12 @@ fn captured_unfocused_and_cursorless_gestures_are_drained_without_replay() {
         let mut h = Harness::new(1.75);
         let anchor = h.anchor();
         match block {
-            0 => h.app.world_mut().resource_mut::<editor::Editor>().capture = true,
+            0 => {
+                h.app
+                    .world_mut()
+                    .resource_mut::<editor::Editor>()
+                    .navigation_capture = true
+            }
             1 => {
                 h.app
                     .world_mut()
@@ -275,7 +296,10 @@ fn captured_unfocused_and_cursorless_gestures_are_drained_without_replay() {
         h.app.update();
         assert_eq!(h.scale(), 4.0);
         h.assert_anchor(anchor);
-        h.app.world_mut().resource_mut::<editor::Editor>().capture = false;
+        h.app
+            .world_mut()
+            .resource_mut::<editor::Editor>()
+            .navigation_capture = false;
         {
             let mut window = h.app.world_mut().get_mut::<Window>(h.window).unwrap();
             window.focused = true;
@@ -385,13 +409,19 @@ fn capture_cancels_an_active_gesture_and_rejects_its_remaining_moved_events() {
     h.app.update();
     let anchor = h.anchor();
     let scale = h.scale();
-    h.app.world_mut().resource_mut::<editor::Editor>().capture = true;
+    h.app
+        .world_mut()
+        .resource_mut::<editor::Editor>()
+        .navigation_capture = true;
     h.raw_pan(h.native, NativePhase::Moved, Vec2::new(30.0, 40.0));
     h.raw_pinch(h.native, NativePhase::Moved, 0.2);
     h.app.update();
     assert_eq!(h.scale(), scale);
     h.assert_anchor(anchor);
-    h.app.world_mut().resource_mut::<editor::Editor>().capture = false;
+    h.app
+        .world_mut()
+        .resource_mut::<editor::Editor>()
+        .navigation_capture = false;
     h.raw_pan(h.native, NativePhase::Moved, Vec2::new(50.0, 60.0));
     h.raw_pinch(h.native, NativePhase::Moved, 0.3);
     h.raw_pinch(h.native, NativePhase::Ended, 0.0);
@@ -458,7 +488,12 @@ fn pending_wheel_stops_on_capture_focus_loss_pointer_drag_or_external_camera_cha
         h.app.update();
         assert!(h.app.world().resource::<navigation::WheelZoom>().active());
         match interruption {
-            0 => h.app.world_mut().resource_mut::<editor::Editor>().capture = true,
+            0 => {
+                h.app
+                    .world_mut()
+                    .resource_mut::<editor::Editor>()
+                    .navigation_capture = true
+            }
             1 => {
                 h.app
                     .world_mut()
@@ -484,7 +519,10 @@ fn pending_wheel_stops_on_capture_focus_loss_pointer_drag_or_external_camera_cha
         h.app.update();
         assert_eq!(h.scale(), scale);
         assert!(!h.app.world().resource::<navigation::WheelZoom>().active());
-        h.app.world_mut().resource_mut::<editor::Editor>().capture = false;
+        h.app
+            .world_mut()
+            .resource_mut::<editor::Editor>()
+            .navigation_capture = false;
         h.app
             .world_mut()
             .get_mut::<Window>(h.window)

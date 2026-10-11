@@ -337,6 +337,7 @@ pub struct Editor {
     pub(super) clipboard_copy_text: Option<String>,
     pub active: Option<EditSession>,
     pub capture: bool,
+    pub navigation_capture: bool,
     gesture: bool,
     initialized: bool,
     serial: u64,
@@ -824,6 +825,7 @@ pub fn ui(
 ) -> bevy::prelude::Result {
     if config.no_ui {
         editor.capture = false;
+        editor.navigation_capture = false;
         return Ok(());
     }
     let ctx = contexts.ctx_mut()?;
@@ -1728,8 +1730,7 @@ pub fn ui(
     if ctx.input(|i| i.pointer.any_pressed()) && ctx.is_pointer_over_egui() {
         editor.gesture = true;
     }
-    editor.capture = active_at_start
-        || editor.export.open
+    editor.navigation_capture = editor.export.open
         || editor.recovery.open
         || editor.home.visible
         || editor.about
@@ -1739,11 +1740,12 @@ pub fn ui(
         || editor.active.is_some()
         || editor.gesture
         || ctx.egui_wants_pointer_input()
-        || ctx.egui_wants_keyboard_input()
         || editor.closing
         || editor.error.is_some()
         || editor.dialog.is_some();
-    editor.capture |= editor.importing.is_some();
+    editor.navigation_capture |= editor.importing.is_some();
+    editor.capture =
+        editor.navigation_capture || active_at_start || ctx.egui_wants_keyboard_input();
     if !ctx.input(|i| i.pointer.any_down()) {
         editor.gesture = false;
     }
