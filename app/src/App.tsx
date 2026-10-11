@@ -3,6 +3,8 @@ import { ask, open, save } from '@tauri-apps/plugin-dialog';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { execute, getSnapshot, native, type Command, type Snapshot } from './bridge';
 import { Icon } from './Icon';
+import { Collaboration } from './Collaboration';
+import { aiHasActive, aiShutdown } from './collaboration';
 import avatar from '../../assets/branding/ravomi-avatar.png';
 import appIcon from '../../assets/branding/app-icons/128x128.png';
 
@@ -21,6 +23,7 @@ export function App() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [view, setView] = useState<'canvas' | 'collaboration'>('canvas');
   const busyRef = useRef(native);
   const node = document.nodes.find((item) => item.id === selected);
   const hasDraft = Boolean(node?.editable && draft !== node.text);
@@ -49,13 +52,18 @@ export function App() {
     getCurrentWindow().onCloseRequested(async (event) => {
       // Block closing during file operations and while a confirmation is open.
       if (busyRef.current || asking) { event.preventDefault(); return; }
-      if (!unsavedRef.current) return;
       event.preventDefault();
       asking = true;
       try {
-        if (await ask('尚有未保存的更改。关闭将放弃这些更改。', {
-          title: '关闭 Ravomi', kind: 'warning', okLabel: '放弃并关闭', cancelLabel: '继续编辑',
-        })) await getCurrentWindow().destroy();
+        const active = await aiHasActive();
+        if ((unsavedRef.current || active) && !await ask([
+          unsavedRef.current ? '尚有未保存的画布修改，关闭将放弃这些修改。' : '',
+          active ? '代码协作仍有活动运行，关闭前会请求停止并保留运行记录。' : '',
+        ].filter(Boolean).join('\n'), {
+          title: '关闭 Ravomi', kind: 'warning', okLabel: '停止并关闭', cancelLabel: '继续工作',
+        })) return;
+        await aiShutdown();
+        await getCurrentWindow().destroy();
       } catch (cause) { setError(String(cause)); }
       finally { asking = false; }
     }).then((stop) => { if (active) unlisten = stop; else stop(); })
@@ -138,11 +146,12 @@ export function App() {
     <aside className="navigation" aria-label="主导航">
       <div className="navigation-brand"><img src={appIcon} alt="" /><div>Ravomi<small>人和 Agent，共绘工作</small></div></div>
       <p className="nav-label">工作空间</p>
-      <a className="nav-current" href="#workspace" aria-current="page"><Icon name="grid" />我的画布</a>
+      <button className={view === 'canvas' ? 'nav-current' : ''} aria-pressed={view === 'canvas'} onClick={() => setView('canvas')}><Icon name="grid" />我的画布</button>
+      <button className={view === 'collaboration' ? 'nav-current' : ''} aria-pressed={view === 'collaboration'} onClick={() => setView('collaboration')}><Icon name="text" />代码协作</button>
       <button disabled={disabled} onClick={() => void run(() => replaceDocument('new'))}><Icon name="plus" />新建</button>
       <button disabled={disabled} onClick={() => void run(() => replaceDocument('open'))}><Icon name="folder" />打开文件</button>
       <button disabled={disabled} onClick={() => void run(() => saveDocument(false))}><Icon name="save" />保存画布</button>
-      <div className="navigation-note"><Icon name="info" /><p>从一个想法出发。<br />让工作，在这里展开。</p><small>Agent 协作仍在规划中</small></div>
+      <div className="navigation-note"><Icon name="info" /><p>从一个想法出发。<br />让工作，在这里展开。</p><small>Pi 代码协作 · MVP</small></div>
       <div className="navigation-footer">Ravomi <span>by Arcraven</span></div>
     </aside>
     <div className="app-content">
@@ -150,6 +159,7 @@ export function App() {
       <div className="brand" aria-label="Ravomi"><img src={appIcon} alt="" />Ravomi</div>
       <div className="document-tab" title={document.path ?? document.title}><Icon name="file" /><span>{document.title}{unsaved ? ' · 未保存' : ''}</span></div>
       <div className="window-actions">
+        <button aria-label={view === 'canvas' ? '打开代码协作' : '返回画布'} onClick={() => setView(view === 'canvas' ? 'collaboration' : 'canvas')}><Icon name="text" /><span>{view === 'canvas' ? '协作' : '画布'}</span></button>
         <button onClick={() => setLight(!light)} aria-label={light ? '切换深色主题' : '切换浅色主题'}><Icon name="moon" /><span>{light ? '深色' : '浅色'}</span></button>
         <label className="scale"><span className="sr-only">界面缩放</span><select value={scale} onChange={(event) => setScale(event.target.value)}>
           <option value="100">100%</option><option value="150">150%</option><option value="200">200%</option>
@@ -165,7 +175,7 @@ export function App() {
 
     {!native && <p className="banner">当前为浏览器预览。文档编辑暂在桌面应用中使用，浏览器版仍在开发。</p>}
     {error && <div className="banner error" role="alert"><span>{error}</span><button onClick={() => setError('')}>关闭提示</button></div>}
-    <main>
+    {view === 'collaboration' ? <Collaboration /> : <main>
       <section className="workspace" id="workspace" aria-label="画布对象" tabIndex={-1}>
         <div className="workspace-heading"><div><p className="eyebrow">YOUR SPACE, YOUR IDEAS</p><h1>让灵感安静生长</h1><p className="hero-description">记录、连接，逐步展开你的工作。</p>
           <button className="primary" disabled={disabled} onClick={() => void run(addText)}><Icon name="plus" />新建文字</button></div>
@@ -193,7 +203,7 @@ export function App() {
         <p className="muted">{node.editable ? '应用后可以撤销。保存会一并应用文字修改。' : '此对象已锁定，或暂不支持在这里编辑。'}</p>
         <button className="primary" disabled={disabled || !hasDraft} onClick={() => void run(applyDraft)}>应用修改</button>
       </> : <div className="inspector-empty"><Icon name="text" /><p>细节，按需展开</p><p className="muted">选择一个对象，<br />在这里查看和编辑它的内容。</p></div>}</aside>
-    </main>
+    </main>}
     <footer><span role="status"><span className="status-dot" />{busy ? '正在处理…' : notice || (unsaved ? '更改尚未保存' : '就绪')}</span><span>{document.nodes.length} 个对象 · {document.edgeCount} 条连线</span></footer>
     </div>
   </div>;

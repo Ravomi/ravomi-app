@@ -1,10 +1,12 @@
 # Ravomi AI 运行与多 Agent 协作设计
 
-版本：0.5（保留原设计编号）· 更新：2026-10-11 · 状态：AI 运行领域设计草案，尚未实现。
+版本：0.5（保留原设计编号）· 更新：2026-10-11 · 状态：完整运行领域设计草案；React/Tauri 已实现下述代码 MVP 子集。
 
 > 本文定义任务、Agent、运行、上下文、工件与交接的领域契约。产品范围、功能状态和发布顺序以 [PRD](PRD.md) 为准；界面以 [DESIGN](DESIGN.md) 为准；供 AI 设计和编写界面的执行规则见 [AI_UI_RULES](AI_UI_RULES.md)。保留既有 G01–G14、G21–G33、V01–V16 与验收编号，不补造缺失编号。
 
-Ravomi 是 Arcraven 的产品。当前仓库同时包含 Rust/Bevy 画布、`app/` React/Tauri 迁移原型和 Wry 内嵌 React 输入层；这些入口尚未接入本文的 AI 运行系统。旧上游 `app/src/core/`、`packages/`、AIEngine 等模块没有因此成为本仓库已实现能力。来源见 [MIGRATION](MIGRATION.md)，当前入口见 [README](README.md#文档与项目结构) 和 [app/README](app/README.md)。
+Ravomi 是 Arcraven 的产品。当前仓库同时包含 Rust/Bevy 画布、`app/` React/Tauri 迁移原型和 Wry 内嵌 React 输入层。`src/collaboration.rs` 与其子模块实现代码 MVP，`app/src/Collaboration.tsx` 是实际入口；Bevy 尚未接入。旧上游 `app/src/core/`、`packages/`、AIEngine 等模块没有因此成为本仓库已实现能力。来源见 [MIGRATION](MIGRATION.md)，当前入口见 [README](README.md#文档与项目结构) 和 [app/README](app/README.md)。
+
+**当前子集与设计差异**：Pi Agent Core / Pi AI 1.0.4 编译为应用私有引擎；Rust 承担 DAG 调度、单任务单 Agent、固定文件快照、显式父子检查任务、取消/重试与按 Run 审阅。持久化暂采用单后端互斥锁保护、一次替换整个快照的版本化 JSON，最多 30 流程/64 MiB；不实现本文完整 SQLite 事件模型、独立 Artifact ID 或审阅事件历史。每个 Run ID 标识一次工件版本。任务开始后计划不可修改，修订需新流程；外部会话续聊、工具循环、Skill 和空间 Agent 模块待实现。代码测试使用隔离目录但具有宿主权限；只导出人工通过的新目录，不写回原项目。完整契约仍作为后续目标，不能以本子集宣称全部完成。
 
 本文以可见、可连接、可干预的多 Agent 协作为主线。研究、写作、编码和视觉创作共用同一套运行契约；视觉图层、品牌包和多尺寸交付属于领域扩展，不再决定整体首发范围。Jaaz、Lovart 等旧参考保留在第 15 节，不覆盖用户已确定的 Arc 式素净 UI 与团子猫品牌。
 
@@ -96,13 +98,13 @@ P0/P1/P2 是各自能力阶段的优先级。V 系列 P0 表示进入视觉扩�
 | 已有基础          | 位置                                                                                  | 可复用部分与缺口                                                |
 | ----------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | 文档与历史 | `src/document.rs`、`src/session.rs` | 复用文档命令与撤销，增加任务/工件格式需要迁移和往返验证 |
-| React/Tauri 原型 | `app/src/App.tsx`、`app/src/bridge.ts`、`app/src-tauri/src/lib.rs` | 对象列表、文字编辑和本地文档接口；尚无 Agent、模型或调度服务 |
+| React/Tauri 原型 | `app/src/App.tsx`、`app/src/Collaboration.tsx`、`app/src-tauri/src/lib.rs` | 对象列表、文字编辑与代码协作；Agent 空间布局待接入 |
 | 空间画布与分组 | `src/viewer.rs`、`src/sections.rs`、`src/edges.rs` | 复用投影、关系与选择；文档连线不是运行依赖，分组不是自动团队授权 |
 | React 原位输入 | `src/react_editor.rs`、`src/edit_protocol.rs`、`app/src/canvas-editor.tsx` | 保留草稿、IME 与提交语义，不复用为第二个运行状态来源 |
 | 素材与图谱导出 | `src/image_import.rs`、`src/export_image.rs`、`src/export_ui.rs` | 已有附件与 PNG 基础；完整视觉图层、作业及交付清单待实现 |
 | 本地恢复 | `src/recovery.rs`、`src/recovery_ui.rs` | 文档恢复副本不能代替 Run 事务日志和副作用恢复 |
-| 执行器、上下文与事件存储 | 尚未实现 | API/外部会话/本地工具统一适配；需新增明确领域层和真实能力探测 |
-| 历史 AIEngine、Pi、KV 研究 | 旧设计参考，非本地已接入模块 | 不声称已有 SDK、MCP 工具目录、缓存服务或完整运行循环 |
+| 执行器、上下文与存储 | `src/collaboration/`、`app/agent-engine/` | 内置 Pi、固定源码、版本化 JSON；完整事务事件模型和外部会话待实现 |
+| 历史 AIEngine、KV 研究 | 旧设计参考，非本地已接入模块 | Pi 已按新入口接入，不包含旧 AIEngine、MCP 工具目录或缓存服务 |
 
 ## 4. 两条贯穿用户旅程
 
@@ -666,7 +668,7 @@ stateDiagram-v2
 
 ### 11.3 交接协议
 
-交接消息固定 `workflowExecutionId`、来源 Run、发送/接收 Agent、目标任务、目标说明、输入快照、工件版本、关键决定、剩余 TODO、摘要、验收引用和消息 ID。使用明确结构与 schema 校验，不把 RPC、CBOR、MCP 当成互相替代的业务协议。MCP 可提供工具能力，消息格式与幂等语义由项目定义；当前尚无已接入的跨 Agent 通信实现。
+完整交接消息应固定 `workflowExecutionId`、来源 Run、发送/接收 Agent、目标任务、目标说明、输入快照、工件版本、关键决定、剩余 TODO、摘要、验收引用和消息 ID。使用明确结构与 schema 校验，不把 RPC、CBOR、MCP 当成互相替代的业务协议。MCP 可提供工具能力，消息格式与幂等语义由项目定义；代码 MVP 已实现进程内调度的固定 Run 来源交接，独立消息投递与确认协议仍待实现。
 
 接收状态与 Run 状态独立：发送成功不代表接收方已经执行，接收成功不代表产物通过审阅。重复投递同一消息不启动重复任务；更换工件或交接目标创建新消息并保留来源记录。父代理仅传递接收方需要的约束与工件，子代理不自动继承全部历史、工作区或权限。
 
@@ -864,7 +866,7 @@ Bevy 是当前已存在的画布基线，React/Tauri 是正在验证的应用迁
 
 对应实现证据：[画布](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/src/components/canvas/CanvasExcali.tsx)、[选区生成](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/src/components/canvas/pop-bar/CanvasMagicGenerator.tsx)、[图片生成入口](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/tools/utils/image_generation_core.py)、[Agent 分工](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/services/langgraph_service/agent_manager.py)、[ComfyUI 工具](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/tools/comfy_dynamic.py)、[导出](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/src/components/canvas/CanvasExport.tsx)。
 
-该记录中的技术栈为 Electron + React + Excalidraw，后端为 Python/FastAPI、SQLite 和 LangGraph；Ravomi 现有 Rust/Bevy 与 React/Tauri 入口尚未接入 AI SDK。历史核验中 Agent Studio 使用 React Flow，但已检查部分未证明该图能够驱动可靠 DAG 执行，因此不将其列为可直接复用的调度引擎。[前端依赖](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/package.json)、[后端依赖](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/requirements.txt)、[Agent Studio](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/src/components/agent_studio/AgentStudio.tsx)。
+该历史记录中的技术栈为 Electron + React + Excalidraw，后端为 Python/FastAPI、SQLite 和 LangGraph；当时 Ravomi 尚未接入 AI SDK，目前代码 MVP 已改为内置 Pi 与 Rust 调度。历史核验中 Agent Studio 使用 React Flow，但已检查部分未证明该图能够驱动可靠 DAG 执行，因此不将其列为可直接复用的调度引擎。[前端依赖](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/package.json)、[后端依赖](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/requirements.txt)、[Agent Studio](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/react/src/components/agent_studio/AgentStudio.tsx)。
 
 Magic 入口会调用 Jaaz 云服务，不能据此认为整条 Magic 链已具备完全本地实现。具体模型、参考图数量和编辑能力也因 provider 而异；未从所查代码确认统一蒙版编辑、完整图层恢复或专业印刷导出。[Magic 入口](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/services/OpenAIAgents_service/jaaz_magic_agent.py)、[云服务调用](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/services/jaaz_service.py)、[图片 Provider](https://github.com/11cafe/jaaz/blob/145dd85067be77e36d400637a595e19a7b07c77a/server/tools/image_providers/jaaz_provider.py)。
 
@@ -896,7 +898,7 @@ Magic 入口会调用 Jaaz 云服务，不能据此认为整条 Magic 链已具�
 | 模型调用与 schema | 待选执行器 SDK 或成熟客户端；明确 DTO 校验 | 当前没有已接入的 AI SDK、Zod 或 MCP 工具目录；不为参考项目复制整套后端 |
 | ZIP/MessagePack | 已锁定 Rust zip、rmp-serde / rmpv | 扩展现有格式，不引入第二套前端文件事实来源 |
 | 任务状态与拓扑 | 标准集合和独立领域状态机，执行图判环待实现 | 文档连线不是调度图；按实际需求再评估通用算法库 |
-| 运行事务存储           | 建议 SQLite，优先成熟 Rust 绑定或 Tauri 生态适配       | 当前尚未接入；普通 JSON 文件不承担多实体原子提交，不自制 WAL，跨调用事务由同一后端持有 |
+| 运行事务存储           | 完整版本建议 SQLite，优先成熟 Rust 绑定或 Tauri 生态适配       | MVP 单后端锁与原子替换整个 JSON 快照；不声称具备数据库多实体事务或 WAL，规模与修订边界见开头 |
 | 画板内部编辑           | Fabric.js 为优先验证候选                                | Konva 为备选；按文字编辑、导出和 WebView 验证选择，避免自造通用图形编辑器                     |
 | 无限工作台             | 当前 Ravomi Rust/Bevy 画布基线与迁移验证                 | 替换渲染器会产生迁移成本，不自动解决编排、输入和专业排版 |
 | 图片处理与导出         | 已锁定 Rust image / resvg 与现有导出模块              | 外部参考中的 Node 专属依赖不能直接假设可在 Tauri WebView 中运行 |

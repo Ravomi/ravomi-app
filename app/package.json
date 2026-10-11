@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "build:agent": "npm --prefix agent-engine ci --ignore-scripts && npm --prefix agent-engine run build",
     "build:canvas-editor": "tsc --noEmit && vite build --config vite.canvas.config.ts",
     "tauri": "tauri",
     "test": "playwright test"

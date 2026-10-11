@@ -33,7 +33,7 @@ Ravomi is designed around three qualities:
 - **Connected**: Make tasks, code, and assets reusable modules with clear relationships, dependencies, and context sources.
 - **Controllable**: Change assignments, revise plans, request a stop, or review results while keeping room to work on other independent branches.
 
-> **Current stage: a local canvas prototype and application UI migration.** The current version supports editing and saving canvases. Agent execution, automated TODO planning, workflow scheduling, and context handoffs are planned capabilities. See the [product definition](PRD.md) for scope.
+> **Current stage: a local canvas prototype and a code collaboration MVP in React/Tauri.** The desktop application now embeds Pi Agent Core for planning, parallel code proposals, fixed-version handoffs and review. Launch the [Tauri entry](app/README.md); the default Bevy canvas does not yet host these agents. Spatial agent modules, image workflows and Skill extraction remain planned. See the [product definition](PRD.md) for scope.
 
 <a id="界面预览"></a>
 
@@ -162,8 +162,8 @@ On Linux, the embedded entry point requires GTK 3, WebKitGTK 4.1, and X11 / XWay
 | --- | --- | --- |
 | Canvas foundation | Local documents, module connections, editing, saving, and export | Prototype available; being refined |
 | Everyday workspace | New UI, canvas migration, input and zoom, recovery, and platform validation | In progress |
-| Single-task execution | Selected inputs, executor calls, results, retries, and reopening tasks | Planned |
-| Multi-agent collaboration | TODO orchestration, parallel branches, subagents, versioned handoffs, and human review | Planned |
+| Single-task execution | Selected inputs, executor calls, results, retries, and reopening tasks | Code MVP in React/Tauri |
+| Multi-agent collaboration | TODO orchestration, parallel branches, subagents, versioned handoffs, and human review | Code MVP; spatial integration pending |
 | Reusable modules and extensions | Multiple executors, composed modules, and research, coding, and visual workflows | Planned |
 
 The first complete collaboration workflow starts with one goal, two parallel branches, one subagent delegation, one merge of versioned results, and one human review. See the [PRD](PRD.md) for scope, dependencies, and acceptance criteria.

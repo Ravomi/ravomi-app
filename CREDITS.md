@@ -38,6 +38,8 @@ Graplu 从 Project Graph 的 Bevy 原型迁入，迁移前的贡献不能仅凭�
 
 ## 许可与署名
 
+代码协作 MVP 内置 [Pi Agent Core / Pi AI](https://github.com/earendil-works/pi/tree/7c10bd4337495ee613f2224843ecdf349b80d1df) 1.0.4，原作者 Mario Zechner，MIT。模块经 Bun 1.3.14 编译进入 Ravomi 的私有引擎，不依赖外部 Pi CLI。上游源码未修改；锁文件、适配边界、Bun 及 Pi 许可证与构建生成的第三方声明说明见 [内置引擎来源](app/agent-engine/README.md)。
+
 连线预览方向与成功反馈参考 Project Graph master `1fb1b5cc77d5d5a3820cbae4f5d5777339af63a0` 的 `ControllerNodeConnection.tsx` 和 `edge/concrete/SymmetryCurveEdgeRenderer.tsx`。Graplu 复用原生曲线与效果队列，使用主题强调色，并沿实际曲线播放短暂流动。
 
 分组概览的触发比例、覆盖透明度与标题拟合规则参考 Project Graph master `1fb1b5cc` 的 `SectionMethods`、`SectionRenderer` 和 `textRenderer`；退出阈值防抖、编辑恢复与标题避让参考本地 `project-graph-godot/src/group_overview.gd`（2026-10-09 工作区版本）。Graplu 保留自适应大标题，不移植 Godot 的固定字号上限、预览截图队列或独立物理对象隐藏机制。

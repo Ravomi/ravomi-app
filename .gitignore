@@ -12,4 +12,6 @@ __pycache__/
 /app/src-tauri/gen/
 /app/test-results/
 /app/playwright-report/
+/app/agent-engine/node_modules/
+/app/src-tauri/binaries/
 

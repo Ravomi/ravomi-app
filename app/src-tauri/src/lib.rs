@@ -1,6 +1,7 @@
 use project_graph_bevy_canvas::session::{Command, Session, Snapshot};
 use std::sync::Mutex;
 use tauri::Manager;
+mod collaboration;
 
 struct AppState(Mutex<Session>);
 
@@ -33,11 +34,22 @@ pub fn run() -> Result<(), tauri::Error> {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            collaboration::install(app)?;
             app.manage(AppState(Mutex::new(
                 Session::new().map_err(std::io::Error::other)?,
             )));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![session_snapshot, session_execute])
+        .invoke_handler(tauri::generate_handler![
+            collaboration::ai_snapshot,
+            collaboration::ai_configure,
+            collaboration::ai_command,
+            collaboration::ai_scan,
+            collaboration::ai_export,
+            collaboration::ai_has_active,
+            collaboration::ai_shutdown,
+            session_snapshot,
+            session_execute
+        ])
         .run(tauri::generate_context!())
 }

@@ -16,7 +16,7 @@ Ravomi 是 Arcraven 的多 Agent 画布工作空间。产品目标是在无限�
 
 当前代码使用 Ravomi 名称，共享主题、原生首页及 React 工作区已落实获准风格卡的暖白／石墨方向。图标从已确认头像导出，供网页、原生窗口和 Linux/macOS 打包配置复用；各平台实际安装结果需分别验收。新设计采用低饱和侧栏和清晰工作区。石墨黑 `#202126`、局部雾蓝紫细颗粒柔光主要用于团子猫形象；小猫为一体轮廓、双耳双眼，无嘴、鼻、尾巴或脚。文字、输入框、连线和操作状态保持清晰，不对整层 UI 施加模糊、颗粒或发光。
 
-Ravomi 的 Rust/Bevy 画布架构以本地文档、ECS 场景、GPU 渲染和 egui 编辑界面为基础。源提交、目录对应和许可见 [迁移说明](MIGRATION.md)。AI 执行、TODO 拆解、Agent 编排与交接尚未接入；实现这些能力时必须同时落实真实状态、上下文来源、结果查看与人工介入路径，不用装饰性 Agent 卡片代替执行模型。
+Ravomi 的 Rust/Bevy 画布架构以本地文档、ECS 场景、GPU 渲染和 egui 编辑界面为基础。源提交、目录对应和许可见 [迁移说明](MIGRATION.md)。代码协作位于 `src/collaboration/`，由 React/Tauri 的独立入口调用编译内置 Pi；其规划、调度、固定版本交接与审阅范围见 [应用说明](app/README.md)。Bevy 空间 Agent 尚未接入；继续实现时必须落实真实状态、上下文来源、结果查看与人工介入路径，不用装饰性 Agent 卡片代替执行模型。
 
 独立的 Rust/Bevy 画布性能原型，直接读取原版 ZIP + MessagePack `.prg`。使用用户指定的 [tutorial-shortcut-keys-3.1.prg](https://github.com/graphif/assets/blob/d9d945e549c9cd8a593ba3079d983e805d9c837c/tutorials/tutorial-shortcut-keys-3.1.prg)。完整解析嵌套对象和路径引用，按 UUID 去重：393 节点（345 文字、27 分组、21 连接点）、230 连线（227 有向、3 多端）、14 附件。附件不是全部都在画布中使用。
 

@@ -1,0 +1,13 @@
+{
+  "name": "ravomi-agent-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "scripts": { "build": "node build.mjs", "test": "node --test test/*.test.mjs" },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.0.4",
+    "@earendil-works/pi-ai": "1.0.4"
+  },
+  "overrides": { "@earendil-works/pi-ai": "1.0.4" }
+}
