@@ -82,6 +82,36 @@ mod tests {
     }
 
     #[test]
+    fn selecting_from_home_does_not_treat_the_opening_click_as_outside() {
+        let ctx = egui::Context::default();
+        let mut menu = Dropdown::default();
+        menu.select(2);
+        let position = egui::pos2(80.0, 660.0);
+        frame(
+            &mut menu,
+            &ctx,
+            0.0,
+            vec![
+                egui::Event::PointerMoved(position),
+                egui::Event::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+                egui::Event::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        assert!(menu.open);
+        assert_eq!(menu.section, 2);
+    }
+
+    #[test]
     fn escape_and_outside_press_close_but_keep_capture_during_animation() {
         for escape in [true, false] {
             let ctx = egui::Context::default();
@@ -136,6 +166,7 @@ pub struct Dropdown {
     horizontal: Spring,
     height: Spring,
     content: Spring,
+    just_selected: bool,
 }
 
 impl Dropdown {
@@ -144,6 +175,7 @@ impl Dropdown {
             return;
         }
         self.open = true;
+        self.just_selected = true;
         self.section = section;
         self.content = Spring::default();
     }
@@ -166,7 +198,8 @@ impl Dropdown {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.open = false;
         }
-        if ctx.input(|i| i.pointer.any_pressed())
+        if !std::mem::take(&mut self.just_selected)
+            && ctx.input(|i| i.pointer.any_pressed())
             && ctx.pointer_interact_pos().is_some_and(|p| {
                 !self.trigger.is_some_and(|r| r.contains(p))
                     && !self.panel.is_some_and(|r| r.contains(p))
