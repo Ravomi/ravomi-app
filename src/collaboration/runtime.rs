@@ -17,11 +17,22 @@ struct State {
 }
 struct Shared {
     path: PathBuf,
-    _lease: fs::File,
+    _lease: DirectoryLease,
     workers: Mutex<Vec<thread::JoinHandle<()>>>,
     state: Mutex<State>,
     executor: Arc<dyn pi::Executor>,
 }
+// Explicitly unlock before closing: a concurrently spawned child can briefly
+// retain a duplicate descriptor between fork and exec on Unix.
+struct DirectoryLease(fs::File);
+impl Drop for DirectoryLease {
+    fn drop(&mut self) {
+        if let Err(error) = self.0.unlock() {
+            eprintln!("无法释放 AI 运行目录锁：{error}");
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Runtime(Arc<Shared>);
 
@@ -48,6 +59,7 @@ impl Runtime {
         lease
             .try_lock()
             .map_err(|e| format!("AI 运行目录已被另一个进程使用，或无法加锁：{e}"))?;
+        let lease = DirectoryLease(lease);
         let path = directory.join(crate::storage::WORKFLOWS_FILE_NAME);
         let mut snapshot: Snapshot = if path.exists() {
             if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
@@ -795,4 +807,24 @@ fn task_prompt(
         serde_json::to_string(files).map_err(|e| e.to_string())?,
         serde_json::to_string(&handoffs).map_err(|e| e.to_string())?
     ))
+}
+
+#[cfg(all(test, unix))]
+mod lease_tests {
+    use super::*;
+
+    #[test]
+    fn lease_release_does_not_wait_for_an_inherited_descriptor() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("runtime.lock");
+        let file = fs::File::create(&path).unwrap();
+        file.try_lock().unwrap();
+        let inherited = file.try_clone().unwrap();
+        let lease = DirectoryLease(file);
+        let contender = fs::File::open(path).unwrap();
+        assert!(contender.try_lock().is_err());
+        drop(lease);
+        contender.try_lock().unwrap();
+        drop(inherited);
+    }
 }
