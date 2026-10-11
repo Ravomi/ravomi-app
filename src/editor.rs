@@ -1201,10 +1201,6 @@ pub fn ui(
             dock_menu::Action::Group => {
                 create_group(&mut scene.0, &mut interaction, &mut editor, &mut physics)
             }
-            dock_menu::Action::ToggleTheme => {
-                editor.light = !editor.light;
-                theme::apply(ctx, editor.light);
-            }
             dock_menu::Action::Zoom(factor) => ctx.set_zoom_factor(factor),
             dock_menu::Action::TogglePhysics => physics.toggle(&mut scene.0),
             dock_menu::Action::Help => editor.help = true,
@@ -1249,14 +1245,6 @@ pub fn ui(
                                 .clicked()
                         {
                             editor.home.visible = true;
-                        }
-                        if ui
-                            .add(dock_button(&editor, ui, 11))
-                            .on_hover_text("切换深色 / 浅色模式")
-                            .clicked()
-                        {
-                            editor.light = !editor.light;
-                            theme::apply(ctx, editor.light);
                         }
                         if !minimal
                             && ui

@@ -215,7 +215,8 @@ pub fn run(graph: Document, args: &[String]) -> Result<()> {
             .map(PathBuf::from)
             .unwrap_or_else(|| "results/bevy.json".into()),
         screenshot: arg(args, "--screenshot").map(PathBuf::from),
-        light: !args.iter().any(|a| a == "--dark"),
+        // The native workspace currently ships only the dark theme.
+        light: false,
         ui_scale: arg(args, "--ui-scale")
             .and_then(|s| s.parse().ok())
             .unwrap_or(1.0),

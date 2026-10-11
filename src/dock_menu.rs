@@ -19,7 +19,6 @@ pub enum Action {
     SaveCopy,
     SelectAll,
     Group,
-    ToggleTheme,
     Zoom(f32),
     TogglePhysics,
     Help,
@@ -429,17 +428,7 @@ impl Dropdown {
                                 }
                             }
                             2 => {
-                                if row(
-                                    if light {
-                                        "切换为深色模式"
-                                    } else {
-                                        "切换为浅色模式"
-                                    },
-                                    "",
-                                    true,
-                                ) {
-                                    action = Some(Action::ToggleTheme);
-                                }
+                                body.label("外观：深色");
                                 body.add_space(8.0);
                                 body.label(egui::RichText::new("界面缩放").small().color(p.muted));
                                 body.horizontal(|ui| {
@@ -504,12 +493,7 @@ impl Dropdown {
         if let Some(section) = next_section {
             self.select(section);
         }
-        if action.is_some()
-            && !matches!(
-                action,
-                Some(Action::ToggleTheme | Action::Zoom(_) | Action::TogglePhysics)
-            )
-        {
+        if action.is_some() && !matches!(action, Some(Action::Zoom(_) | Action::TogglePhysics)) {
             self.open = false;
         }
         action
