@@ -462,7 +462,9 @@ pub fn ui(
     let mut command = None;
     let mut new_skill = false;
     let mut connect = false;
-    let mut open = state.open || submit_key;
+    // Submitting from the canvas must not open a panel over the task nodes.
+    // Only the explicit collaboration entry controls panel visibility.
+    let mut open = state.open;
     let mut close = false;
     if open && !editor.home_visible() {
         egui::Window::new("画布协作").title_bar(false).frame(theme::tool_frame(editor.light)).open(&mut open).default_width(430.0).min_width(120.0).max_width((ctx.content_rect().width() - 64.0).max(120.0)).default_pos([700.0, 135.0]).show(ctx, |ui| {
