@@ -1,5 +1,7 @@
 # 贡献者与致谢
 
+中文 AI 输出的信息组织参考 [ayghri/i-have-adhd 表达规范](https://github.com/ayghri/i-have-adhd/blob/main/skills/i-have-adhd/SKILL.md)（[MIT 许可](https://github.com/ayghri/i-have-adhd/blob/main/LICENSE)，2026-10-12 阅读）。借鉴答案优先、短步骤和有限分组原则，未复制插件或安装 Skill。
+
 Ravomi 是 Arcraven 的多 Agent 画布产品，曾用名 H&M / Huginn & Muninn，在 Graplu 画布原型基础上继续开发。公开产品仓库为 [Ravomi/ravomi-app](https://github.com/Ravomi/ravomi-app)，此前开发仓库为 [Wang-Yang-source/H-M](https://github.com/Wang-Yang-source/H-M)。Graplu 阶段属于 graphif 项目体系，相关社区贡献及上游来源保留如下。
 
 产品与能力状态见 [README](README.md) 和 [PRD](PRD.md)；UI/UX 与 AI 实现约束见 [DESIGN](DESIGN.md) 和 [AI_UI_RULES](AI_UI_RULES.md)。本文件记录贡献和来源，不将上游界面或历史配色列为 Ravomi 的现行设计要求。

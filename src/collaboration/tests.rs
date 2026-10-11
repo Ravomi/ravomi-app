@@ -289,7 +289,40 @@ fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_version
         .iter()
         .position(|n| n.id == planner.group_id)
         .unwrap();
-    assert!(doc.nodes[index].collapsed);
+    assert!(!doc.nodes[index].collapsed);
+    let log = &planner.log_id;
+    assert!(
+        doc.nodes
+            .iter()
+            .find(|n| &n.id == log)
+            .unwrap()
+            .text
+            .contains("完成条件")
+    );
+    for agent in &bindings.workflows[0].agents[1..] {
+        let run = snapshot.workflows[0]
+            .runs
+            .iter()
+            .rev()
+            .find(|run| run.task_id == agent.task_id)
+            .unwrap();
+        assert_eq!(
+            doc.nodes
+                .iter()
+                .find(|n| n.id == agent.log_id)
+                .unwrap()
+                .text,
+            run.proposal.as_ref().unwrap().summary
+        );
+        assert!(run.prompt.contains("默认用中文回答，借鉴 ASD-STE100"));
+    }
+    doc.set_sections_collapsed(&HashSet::from([index]), true)
+        .unwrap();
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert!(
+        doc.nodes[index].collapsed,
+        "refresh must preserve manual collapse"
+    );
     assert!(bindings.capture(&doc, &HashSet::from([index])).is_err());
     let refs = bindings.selected_runs(&doc, &HashSet::from([index]), &snapshot);
     assert_eq!(refs[0].run_id, snapshot.workflows[0].runs[0].id);
@@ -301,6 +334,44 @@ fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_version
     assert_eq!(doc.revision, saved_revision);
     let restored = Document::open(&file).unwrap();
     assert_eq!(restored.history_archive(), doc.history_archive());
+    let mut reopened = Document::open(&file).unwrap();
+    canvas::Bindings::read(&reopened)
+        .unwrap()
+        .sync(&mut reopened, &snapshot)
+        .unwrap();
+    assert!(
+        reopened
+            .nodes
+            .iter()
+            .find(|node| node.id == doc.nodes[index].id)
+            .unwrap()
+            .collapsed
+    );
+    let mut long_snapshot = snapshot.clone();
+    let mut run = long_snapshot.workflows[0]
+        .runs
+        .iter()
+        .find(|run| run.proposal.is_some())
+        .unwrap()
+        .clone();
+    run.id = super::id();
+    let expected = "这是完整的回答。\n".repeat(500);
+    run.proposal.as_mut().unwrap().summary = expected.clone();
+    let agent = bindings.workflows[0]
+        .agents
+        .iter()
+        .find(|a| a.task_id == run.task_id)
+        .unwrap();
+    let log_id = agent.log_id.clone();
+    long_snapshot.workflows[0].runs.push(run);
+    bindings
+        .clone()
+        .sync(&mut reopened, &long_snapshot)
+        .unwrap();
+    assert_eq!(
+        reopened.nodes.iter().find(|n| n.id == log_id).unwrap().text,
+        expected
+    );
     if let Some(path) = std::env::var_os("RAVOMI_CANVAS_AI_FIXTURE") {
         doc.save(Path::new(&path)).unwrap();
         fs::copy(

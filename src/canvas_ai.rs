@@ -785,7 +785,8 @@ mod tests {
         assert!(
             doc.nodes
                 .iter()
-                .any(|node| node.text.contains("完整记录见 AI 详情"))
+                .all(|node| !node.text.contains("全文不能被预览截断")),
+            "raw execution logs belong in the archive, not the answer body"
         );
 
         state.prepare_document(&mut reopened, &fresh).unwrap();

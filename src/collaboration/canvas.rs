@@ -21,6 +21,8 @@ pub struct Agent {
     pub task_id: String,
     pub group_id: String,
     pub log_id: String,
+    #[serde(default)]
+    pub presented_run_id: Option<String>,
 }
 
 impl Bindings {
@@ -216,6 +218,7 @@ impl Bindings {
                         task_id: task_id.clone(),
                         group_id: doc.nodes[group].id.clone(),
                         log_id: doc.nodes[log].id.clone(),
+                        presented_run_id: None,
                     });
                     let upstream: Vec<_> = if task_id == "$plan" {
                         binding
@@ -263,28 +266,25 @@ impl Bindings {
                 }
                 let agent = binding
                     .agents
-                    .iter()
+                    .iter_mut()
                     .find(|a| a.task_id == task_id)
                     .unwrap();
                 let runs: Vec<_> = w.runs.iter().filter(|r| r.task_id == task_id).collect();
                 let state = runs.last().map(|r| status(&r.status)).unwrap_or("等待依赖");
-                let heading = format!("{title}\n{state}");
-                let mut body = format!(
-                    "{title}\n流程：{}\n父代理：{}\n",
-                    w.id,
-                    parent.as_deref().unwrap_or("无")
-                );
-                for run in runs {
-                    body.push_str(&format!(
-                        "\n运行：{} · {}\n{}\n",
-                        run.id,
-                        status(&run.status),
-                        run.error.as_deref().unwrap_or("")
-                    ));
-                    body.extend(run.output.chars().take(2500));
-                    if run.output.chars().count() > 2500 {
-                        body.push_str("\n…完整记录见 AI 详情");
+                let heading = format!("{title} · {state}");
+                let latest = runs.last().copied();
+                let body = response_body(w, &task_id, latest, parent.as_deref());
+                // Present each completed result once. Later refreshes preserve a
+                // user's choice to collapse it, including after saving/reopening.
+                if let Some(run) = latest.filter(|r| r.status == Status::Succeeded)
+                    && agent.presented_run_id.as_deref() != Some(&run.id)
+                {
+                    if let Some(node) = doc.graph.nodes.iter_mut().find(|n| n.id == agent.group_id)
+                    {
+                        node.collapsed = false;
+                        changed_text = true;
                     }
+                    agent.presented_run_id = Some(run.id.clone());
                 }
                 for (id, text) in [(&agent.group_id, heading), (&agent.log_id, body)] {
                     if let Some(node) = doc.graph.nodes.iter_mut().find(|n| &n.id == id)
@@ -301,6 +301,45 @@ impl Bindings {
         }
         self.write(doc)
     }
+}
+
+fn response_body(w: &Workflow, task_id: &str, run: Option<&Run>, parent: Option<&str>) -> String {
+    if let Some(run) = run {
+        if let Some(proposal) = &run.proposal {
+            return proposal.summary.clone();
+        }
+        if let Some(error) = &run.error {
+            return format!("任务未完成。\n{error}");
+        }
+        if task_id == "$plan"
+            && let Some(plan) = w.plan.as_ref().or(w.draft_plan.as_ref())
+        {
+            return plan
+                .tasks
+                .iter()
+                .enumerate()
+                .map(|(i, task)| {
+                    format!(
+                        "{}. {}\n{}\n完成条件：{}",
+                        i + 1,
+                        task.title,
+                        task.instruction,
+                        task.acceptance
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n\n");
+        }
+        return if run.status == Status::Succeeded {
+            "本次运行没有可显示的正文。请查看运行详情。".into()
+        } else {
+            format!("{}。完成后在此显示正文。", status(&run.status))
+        };
+    }
+    parent.map_or_else(
+        || "等待开始。".into(),
+        |parent| format!("等待上游任务 {parent}。"),
+    )
 }
 
 fn tasks(workflow: &Workflow) -> Vec<(String, String, Option<String>)> {

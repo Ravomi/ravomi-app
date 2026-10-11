@@ -1778,9 +1778,6 @@ pub fn fit_text_nodes(
         return;
     }
     let mut resized = HashSet::new();
-    // Generated records have a fixed preview viewport; full output lives in the AI inspector.
-    // The AI system reports malformed binding errors through the editor error dialog.
-    let ai_bindings = project_graph_bevy_canvas::collaboration::canvas::Bindings::read(&scene.0);
     pending.retain(|entity, (index, content)| {
         if !labels.contains(*entity) {
             return false;
@@ -1789,12 +1786,6 @@ pub fn fit_text_nodes(
             return false;
         };
         if node.kind != "TextNode" {
-            return false;
-        }
-        if ai_bindings
-            .as_ref()
-            .is_ok_and(|bindings| bindings.is_log(&node.id))
-        {
             return false;
         }
         if editor

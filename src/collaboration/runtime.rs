@@ -630,7 +630,14 @@ fn get_run<'a>(w: &'a mut Workflow, id: &str) -> Result<&'a mut Run> {
         .find(|r| r.id == id)
         .ok_or("运行不存在".into())
 }
+const OUTPUT_STYLE: &str = include_str!("output_style.txt");
+
 fn new_run(task: &str, prompt: String, input_files: Vec<SourceFile>, sources: Vec<String>) -> Run {
+    let prompt = if prompt.starts_with(OUTPUT_STYLE) {
+        prompt
+    } else {
+        format!("{OUTPUT_STYLE}\n\n{prompt}")
+    };
     Run {
         id: id(),
         task_id: task.into(),
@@ -812,6 +819,16 @@ fn task_prompt(
 #[cfg(all(test, unix))]
 mod lease_tests {
     use super::*;
+
+    #[test]
+    fn output_policy_applies_to_every_run_without_stacking_on_retry() {
+        for task in ["$plan", "answer", "$skill"] {
+            let run = new_run(task, "测试输入".into(), vec![], vec![]);
+            assert!(run.prompt.starts_with(OUTPUT_STYLE));
+            let retry = new_run(task, run.prompt.clone(), vec![], vec![]);
+            assert_eq!(retry.prompt, run.prompt);
+        }
+    }
 
     #[test]
     fn lease_release_does_not_wait_for_an_inherited_descriptor() {
