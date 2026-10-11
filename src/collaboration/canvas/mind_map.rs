@@ -71,7 +71,12 @@ pub(super) fn sync(doc: &mut Document, w: &Workflow, binding: &mut Binding) -> R
         if binding.answer_maps.iter().any(|map| map.run_id == run.id) {
             continue;
         }
-        let outline = topics(&run.proposal.as_ref().unwrap().summary)?;
+        let summary = &run.proposal.as_ref().unwrap().summary;
+        if summary.trim_start().starts_with('{') {
+            network::project(doc, binding, &run.id, summary)?;
+            continue;
+        }
+        let outline = topics(summary)?;
         let sources: Vec<_> = binding
             .input_ids
             .iter()

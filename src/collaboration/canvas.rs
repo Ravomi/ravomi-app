@@ -3,6 +3,7 @@ use super::*;
 use crate::document::Document;
 use std::collections::HashSet;
 mod mind_map;
+mod network;
 
 const ATTACHMENT: &str = "ravomi-code-agents.json";
 
