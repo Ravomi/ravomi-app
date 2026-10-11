@@ -1,89 +1,103 @@
 <div align="center">
 
-<img src="assets/branding/ravomi-logo.png" alt="Ravomi：石墨黑团子猫与字标" width="640" />
+**English** | [中文](README-ZH.md)
 
-**让人和 Agent，在同一张画布上协作。**
+<img src="assets/branding/ravomi-logo.png" alt="Ravomi: a graphite-black cat beside the wordmark" width="640" />
 
-<em>A shared canvas for people and AI agents.</em>
+**A shared canvas for people and AI agents.**
 
-Arcraven · 可见、可连接、可干预的多 Agent 工作空间
+Arcraven · A visible, connected, controllable multi-agent workspace
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-535762?style=flat-square)](LICENSE)
-[![Status: Prototype](https://img.shields.io/badge/Status-Prototype-838BA3?style=flat-square)](#当前进展)
+[![Status: Prototype](https://img.shields.io/badge/Status-Prototype-838BA3?style=flat-square)](#current-progress)
 
-[产品概述](#产品概述) · [界面预览](#界面预览) · [快速开始](#快速开始) · [路线图](#路线图) · [参与开发](#参与开发)
+[Overview](#overview) · [Preview](#preview) · [Quick start](#quick-start) · [Roadmap](#roadmap) · [Contributing](#contributing)
 
 </div>
 
-## 产品概述
+<a id="产品概述"></a>
 
-**Ravomi 是 Arcraven 正在构建的无限画布多 Agent 协作工作空间。** 它将 Agent、代码、素材、任务与子代理组织成可连接的模块，让人既能看清整个项目，也能随时进入一个分支推进具体工作。
+## Overview
 
-从一句目标、一份资料或一个待办开始，AI 拆解 TODO、分配任务、编排流程，并在 Agent 之间交接所需上下文与成果。你可以查看进度、调整计划、补充输入和审阅结果；一个分支运行时，其他工作仍可继续。
+**Ravomi is an infinite-canvas workspace for multi-agent collaboration, being built by Arcraven.** It brings agents, code, assets, tasks, and subagents into connectable modules, so you can understand the whole project and step into any branch to move the work forward.
 
-| 从什么开始 | 如何协作 | 希望得到什么 |
+The intended workflow starts with a goal, a reference, or a task. AI breaks it into TODOs, assigns work, coordinates the workflow, and hands the necessary context and results between agents. You can follow progress, adjust plans, add input, and review results while other branches continue independently.
+
+| Start with | Work together | Work toward |
 | --- | --- | --- |
-| 目标、任务、代码、参考资料与素材 | 在画布上组织模块，让 Agent 分工、并行执行、交接与汇合 | 可追溯的成果，以及始终能理解和介入的工作过程 |
+| Goals, tasks, code, references, and assets | Organize modules on a canvas; let agents divide work, run in parallel, hand off, and bring results together | Traceable results and a process you can understand and influence throughout |
 
-我们围绕三个体验设计 Ravomi：
+Ravomi is designed around three qualities:
 
-- **可见**：看清谁在做什么、依赖哪些输入、产出了哪个版本，以及哪里需要你作出决定。
-- **可连接**：让任务、代码与素材成为可复用模块，明确它们之间的关联、依赖和上下文来源。
-- **可干预**：调整分工、修订计划、请求停止或审阅成果，同时保留其他独立分支的工作空间。
+- **Visible**: See who is doing what, which inputs they depend on, which version they produced, and where your decision is needed.
+- **Connected**: Make tasks, code, and assets reusable modules with clear relationships, dependencies, and context sources.
+- **Controllable**: Change assignments, revise plans, request a stop, or review results while keeping room to work on other independent branches.
 
-> **当前阶段：本地画布原型与应用界面迁移。** 现有版本可编辑和保存画布；Agent 执行、自动 TODO、工作流调度与上下文交接属于后续开发方向。详细范围见 [产品定义](PRD.md)。
+> **Current stage: a local canvas prototype and application UI migration.** The current version supports editing and saving canvases. Agent execution, automated TODO planning, workflow scheduling, and context handoffs are planned capabilities. See the [product definition](PRD.md) for scope.
 
-## 界面预览
+<a id="界面预览"></a>
+
+## Preview
 
 <div align="center">
 
-<img src="assets/branding/ravomi-workspace-concept.png" alt="Ravomi 目标界面：素净画布上连接规划、研究、开发与视觉 Agent，右侧展开任务详情" width="100%" />
+<img src="assets/branding/ravomi-workspace-concept.png" alt="Ravomi workspace concept: a quiet canvas connecting planning, research, development, and visual agents, with task details on the right" width="100%" />
 
-<sub>目标 UI 设计概念，包含规划中的 Agent 协作能力；并非当前应用截图。</sub>
+<sub>Target UI concept, including planned agent collaboration features. This is not a screenshot of the current application.</sub>
 
 </div>
 
-界面保持素净：低饱和雾灰紫外壳、暖白工作区、清晰的文字与连接关系，细节按需展开。石墨黑团子猫以局部雾蓝紫细颗粒柔光呈现“迷幻、神秘而克制”的气质，工作内容始终清晰可读。
+The interface stays quiet: a muted gray-violet shell, a warm-white workspace, clear text and connections, and details revealed when needed. A graphite-black cat carries a restrained sense of mystery through local misty blue-violet light and fine grain. The work itself remains clear and readable.
 
-布局、状态、键盘操作与可访问性见 [UI/UX 规范](DESIGN.md)；角色与字标见 [品牌规范](assets/branding/BRAND.md)。当前原型的实际截图与检查环境收录在 [验证记录](VALIDATION.md)。
+See the [UI/UX specification](DESIGN.md) for layout, states, keyboard interaction, and accessibility, and the [brand guidelines](assets/branding/BRAND.md) for the character and wordmark. Actual prototype screenshots and their test environments are documented in the [validation records](VALIDATION.md).
 
-## 从目标到成果
+<a id="从目标到成果"></a>
 
-以“准备一次产品发布”为例，完整的协作体验将按以下流程展开：
+## From a goal to a result
 
-1. **放入目标与资料**：把发布目标、产品说明、代码和参考素材放到画布上。
-2. **拆解与分工**：规划 Agent 生成有完成条件的 TODO，连接研究、开发与视觉任务。
-3. **并行推进**：不同 Agent 处理各自任务，必要时委派子代理；你可以继续整理资料或推进另一条分支。
-4. **交接与汇合**：下游任务接收指定版本的成果及必要上下文，保留来源与依赖关系。
-5. **审阅与调整**：查看结果、补充反馈、重试或重新分配任务，逐步完成交付。
+For a goal such as “prepare a product launch,” the full collaboration experience is designed to work like this:
 
-画布负责呈现关系，任务范围与所选输入决定实际执行。一次运行记录一次尝试，成果按版本保留；连接模块本身不会自动执行命令或发布内容。运行与交接契约见 [AI 运行设计](AI_DESIGN.md)。
+1. **Add the goal and references**: Place the launch brief, product notes, code, and reference assets on the canvas.
+2. **Plan and assign**: A planning agent creates TODOs with completion criteria and connects research, development, and visual tasks.
+3. **Move forward in parallel**: Agents handle their assignments and delegate to subagents when needed. You can keep organizing references or work on another branch.
+4. **Hand off and combine**: Downstream tasks receive specific versions of results and the necessary context, preserving sources and dependencies.
+5. **Review and adjust**: Inspect results, add feedback, retry, or reassign work until the deliverable is ready.
 
-## 当前进展
+The canvas shows relationships; task scope and selected inputs determine what actually runs. Each run records one attempt, and results retain their versions. Connecting modules does not automatically execute commands or publish content. See the [AI execution design](AI_DESIGN.md) for run and handoff contracts.
 
-仓库包含三个共享 Rust 文档基础的实现入口：
+<a id="当前进展"></a>
 
-| 入口 | 当前可用 | 正在补齐 |
+## Current progress
+
+The repository contains three entry points built on a shared Rust document foundation:
+
+| Entry point | Available today | Work remaining |
 | --- | --- | --- |
-| **Rust / Bevy 画布** | 文字节点、连线、嵌套分组、图片导入、搜索、缩放平移、撤销重做、`.prg` 保存与恢复副本、PNG 导出 | 新 UI 规范、日常编辑细节与跨平台验证 |
-| **React / Tauri 原型** | 对象列表、文字编辑、新建、打开、保存、撤销重做；复用 Rust 文档核心 | 空间画布与完整交互迁移；浏览器入口仅作界面预览 |
-| **Bevy 内嵌 React 输入** | 通过 Wry 子 WebView 在原生画布中编辑节点文字 | 独立实验入口，已有 Linux X11 / XWayland 验证 |
+| **Rust / Bevy canvas** | Text nodes, connections, nested groups, image import, search, zoom and pan, undo and redo, `.prg` saving and recovery copies, PNG export | New UI specification, everyday editing refinements, and cross-platform validation |
+| **React / Tauri prototype** | Object list, text editing, new/open/save, undo and redo; reuses the Rust document core | Spatial canvas and full interaction migration; the browser entry point is a UI preview only |
+| **React input embedded in Bevy** | Node text editing in the native canvas through a Wry child WebView | A separate experimental entry point, with Linux X11 / XWayland validation recorded |
 
-Linux 已有编辑与渲染验证记录；Apple Silicon macOS 完成过原生启动及 DMG 打包的有限验证，见 [macOS 说明](packaging/macos/README.md)。Windows 和移动端尚无完整运行验收。格式兼容范围与已知问题见 [验证记录](VALIDATION.md)。
+Editing and rendering have been validated on Linux. Native startup and DMG packaging have received limited validation on Apple Silicon macOS; see the [macOS notes](packaging/macos/README.md). Windows and mobile platforms have not completed full runtime validation. See the [validation records](VALIDATION.md) for format compatibility and known issues.
 
-## 快速开始
+<a id="快速开始"></a>
 
-### 1. 准备环境
+## Quick start
 
-| 依赖 | 要求 |
+<a id="1-准备环境"></a>
+
+### 1. Prepare your environment
+
+| Dependency | Requirement |
 | --- | --- |
-| Rust | 1.95 或更高版本，包含 Cargo |
-| 桌面构建环境 | C / C++ 构建工具及对应平台的窗口、图形依赖 |
-| Linux 运行环境 | X11 / Wayland、Vulkan 驱动、Fontconfig 与中文字体 |
+| Rust | Version 1.95 or later, including Cargo |
+| Desktop build environment | C / C++ build tools and platform-specific windowing and graphics dependencies |
+| Linux runtime | X11 / Wayland, Vulkan drivers, Fontconfig, and CJK fonts |
 
-平台依赖与运行参数见 [开发指南](DEVELOPMENT.md)。当前画布运行无需配置模型 API 密钥。
+See the [development guide](DEVELOPMENT.md) for platform dependencies and runtime options. The current canvas does not require a model API key.
 
-### 2. 获取源码并启动画布
+<a id="2-获取源码并启动画布"></a>
+
+### 2. Get the source and launch the canvas
 
 ```sh
 git clone https://github.com/Ravomi/ravomi-app.git
@@ -91,34 +105,36 @@ cd ravomi-app
 ./run.sh
 ```
 
-启动器按需编译并进入首页。选择“新建草稿”，即可开始编辑；也可以打开已有 `.prg` 文档。
+The launcher builds the application as needed and opens the home screen. Choose “新建草稿” (New draft) to start editing, or open an existing `.prg` document.
 
-打开指定文件并使用本机中文字体：
+To open a specific file and use a local CJK font:
 
 ```sh
 ./run.sh /absolute/path/example.prg --font /path/to/your-cjk-font.ttf
 ```
 
-Linux 默认字体路径为 `/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc`；本机路径不同时使用 `--font` 指定。
+On Linux, the default font path is `/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc`. Use `--font` if the font is installed elsewhere.
 
-### 3. 创建第一张画布
+<a id="3-创建第一张画布"></a>
 
-| 操作 | 方式 |
+### 3. Create your first canvas
+
+| Action | Control |
 | --- | --- |
-| 创建 / 编辑文字节点 | 双击空白处 / 双击文字节点 |
-| 完成编辑 / 插入换行 | Enter / Shift+Enter |
-| 缩放 / 平移 | 滚轮 / 中键拖动或空格＋左键拖动 |
-| 多选 / 分组 | Shift＋点击 / Ctrl+G |
-| 连接节点 | 从节点右键拖向另一节点 |
-| 撤销 / 重做 / 保存 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+S |
-| 查看全图 | F |
+| Create / edit a text node | Double-click an empty area / a text node |
+| Finish editing / insert a line break | Enter / Shift+Enter |
+| Zoom / pan | Scroll wheel / middle-button drag or Space+left-button drag |
+| Select multiple nodes / group | Shift+click / Ctrl+G |
+| Connect nodes | Right-button drag from one node to another |
+| Undo / redo / save | Ctrl+Z / Ctrl+Shift+Z / Ctrl+S |
+| Fit the canvas in view | F |
 
-以上为默认桌面操作；触控板、macOS 修饰键及输入焦点规则见 [开发指南](DEVELOPMENT.md)。保存写入原文件，恢复副本作为独立文件保留。
+These are the default desktop controls. See the [development guide](DEVELOPMENT.md) for trackpad behavior, macOS modifier keys, and input focus rules. Saving writes to the original file; recovery copies remain separate files.
 
 <details>
-<summary><strong>开发者入口：React / Tauri 与内嵌 React 输入</strong></summary>
+<summary><strong>Developer entry points: React / Tauri and embedded React input</strong></summary>
 
-React / Tauri 原型需要 Node.js 24、npm、Rust 与平台构建依赖。在仓库根目录执行：
+The React / Tauri prototype requires Node.js 24, npm, Rust, and platform build dependencies. From the repository root, run:
 
 ```sh
 cd app
@@ -126,58 +142,68 @@ npm ci
 npm run tauri dev
 ```
 
-`npm run dev` 仅预览浏览器界面，文档操作禁用。Tauri 原型目前提供对象列表与文字编辑，尚未承载完整空间画布。
+`npm run dev` previews the browser UI only, with document operations disabled. The Tauri prototype currently offers an object list and text editing; it does not yet provide the full spatial canvas.
 
-在完成 `app` 依赖安装后，可从仓库根目录使用独立入口体验 Bevy 内嵌 React 文字编辑：
+After installing the `app` dependencies, you can try React text editing embedded in Bevy through a separate entry point. Run this from the repository root:
 
 ```sh
 ./app/run-canvas.sh
 ```
 
-Linux 内嵌入口需要 GTK 3、WebKitGTK 4.1 与 X11 / XWayland。完整环境要求、入口区别与验证命令见 [app/README](app/README.md)。
+On Linux, the embedded entry point requires GTK 3, WebKitGTK 4.1, and X11 / XWayland. See [app/README](app/README.md) for full environment requirements, differences between entry points, and validation commands.
 
 </details>
 
-## 路线图
+<a id="路线图"></a>
 
-| 阶段 | 重点 | 状态 |
+## Roadmap
+
+| Stage | Focus | Status |
 | --- | --- | --- |
-| 画布基础 | 本地文档、模块连接、编辑、保存与导出 | 已有原型，持续完善 |
-| 日常工作空间 | 新界面、画布迁移、输入与缩放、恢复及平台验收 | 进行中 |
-| 单任务执行 | 选定输入、调用执行器、接收成果、重试与重新打开 | 规划 |
-| 多 Agent 协作 | TODO 编排、并行分支、子代理、版本交接与人工审阅 | 规划 |
-| 模块复用与扩展 | 多执行器协作、组合模块，以及研究、编码和视觉工作流 | 规划 |
+| Canvas foundation | Local documents, module connections, editing, saving, and export | Prototype available; being refined |
+| Everyday workspace | New UI, canvas migration, input and zoom, recovery, and platform validation | In progress |
+| Single-task execution | Selected inputs, executor calls, results, retries, and reopening tasks | Planned |
+| Multi-agent collaboration | TODO orchestration, parallel branches, subagents, versioned handoffs, and human review | Planned |
+| Reusable modules and extensions | Multiple executors, composed modules, and research, coding, and visual workflows | Planned |
 
-核心协作闭环从“一份目标、两条并行分支、一次子代理委派、一个版本汇合、一次人工审阅”开始。具体范围、依赖与验收标准见 [PRD](PRD.md)。
+The first complete collaboration workflow starts with one goal, two parallel branches, one subagent delegation, one merge of versioned results, and one human review. See the [PRD](PRD.md) for scope, dependencies, and acceptance criteria.
 
-## 文档与项目结构
+<a id="文档与项目结构"></a>
 
-| 文档 | 内容 |
+## Documentation and project structure
+
+| Document | Contents |
 | --- | --- |
-| [产品定义](PRD.md) | 产品范围、用户旅程、阶段与验收 |
-| [UI/UX 规范](DESIGN.md) | 布局、视觉层级、组件、状态与可访问性 |
-| [AI UI 规则](AI_UI_RULES.md) | 给 AI 设计和实现界面的执行约束 |
-| [AI 运行设计](AI_DESIGN.md) | Agent、任务、上下文、工件与调度契约 |
-| [开发指南](DEVELOPMENT.md) · [开发约定](AGENTS.md) | 实现入口、环境、检查与协作方式 |
-| [验证记录](VALIDATION.md) | 已执行检查、运行环境与已知限制 |
+| [Product definition](PRD.md) | Scope, user journeys, stages, and acceptance criteria |
+| [UI/UX specification](DESIGN.md) | Layout, visual hierarchy, components, states, and accessibility |
+| [AI UI rules](AI_UI_RULES.md) | Constraints for AI-assisted interface design and implementation |
+| [AI execution design](AI_DESIGN.md) | Contracts for agents, tasks, context, artifacts, and scheduling |
+| [Development guide](DEVELOPMENT.md) · [Development conventions](AGENTS.md) | Entry points, environment, checks, and collaboration practices |
+| [Validation records](VALIDATION.md) | Completed checks, environments, and known limitations |
 
 ```text
-src/          Rust 文档核心、历史与恢复、Bevy 画布
-app/          React / Tauri 原型与内嵌文字输入
-assets/       品牌、图标与字体资源
-packaging/    平台打包与集成
-validation/   验证记录与截图
-vendor/       保留来源与修改记录的依赖
+src/          Rust document core, history and recovery, Bevy canvas
+app/          React / Tauri prototype and embedded text input
+assets/       Brand assets, icons, and fonts
+packaging/    Platform packaging and integration
+validation/   Validation records and screenshots
+vendor/       Dependencies with preserved source and change records
 ```
 
-## 参与开发
+Most development and design documents are currently written in Chinese. The [Chinese README](README-ZH.md) covers the same product overview and setup instructions.
 
-欢迎通过 [Issues](https://github.com/Ravomi/ravomi-app/issues) 反馈问题、提出场景或讨论设计，也欢迎提交代码、文档与测试改进。交互问题请附复现步骤、运行入口、系统及缩放比例；文件问题请提供移除敏感内容后的最小示例。
+<a id="参与开发"></a>
 
-提交前阅读 [开发约定](AGENTS.md)：独立变更保持单独、可回滚的提交，并运行相关检查；界面变更同时核对 [设计规范](DESIGN.md) 与实际交互。新增 skill 仅安装到项目的 `.agents/skills/`。
+## Contributing
 
-## 致谢与许可
+Use [Issues](https://github.com/Ravomi/ravomi-app/issues) to report problems, suggest use cases, or discuss design. Contributions to code, documentation, and tests are welcome. For interaction issues, include reproduction steps, the entry point used, your operating system, and display scaling. For file issues, provide a minimal example with sensitive content removed.
 
-Ravomi 由 Arcraven 开发，沿用 Project Graph / Graplu 原型的部分基础与 `.prg` 兼容约定。感谢上游作者、开源依赖维护者，以及参与代码、设计、文档和测试的贡献者。来源与迁移记录见 [MIGRATION](MIGRATION.md)，完整致谢索引见 [CREDITS](CREDITS.md)。
+Read the [development conventions](AGENTS.md) before contributing. Keep independent changes in separate, reversible commits and run the relevant checks. For interface changes, verify both the [design specification](DESIGN.md) and the actual interaction. Install new skills only in the project's `.agents/skills/` directory.
 
-项目采用 [GPL-3.0-only](LICENSE)。第三方组件保留各自版权与许可证；品牌资源说明见 [BRAND](assets/branding/BRAND.md)。
+<a id="致谢与许可"></a>
+
+## Acknowledgments and license
+
+Ravomi is developed by Arcraven and builds on parts of the Project Graph / Graplu prototypes and their `.prg` compatibility conventions. We thank the upstream authors, open-source dependency maintainers, and everyone contributing code, design, documentation, and tests. See [MIGRATION](MIGRATION.md) for source and migration records, and [CREDITS](CREDITS.md) for the full acknowledgments index.
+
+The project is licensed under [GPL-3.0-only](LICENSE). Third-party components retain their own copyright notices and licenses. See [BRAND](assets/branding/BRAND.md) for brand asset information.
