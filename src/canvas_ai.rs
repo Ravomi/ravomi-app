@@ -430,15 +430,33 @@ pub fn ui(
     egui::Area::new("canvas-ai-entry".into())
         .anchor(egui::Align2::RIGHT_TOP, [-20.0, 86.0])
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_min_width(170.0);
-                if ui.button("Pi · 画布协作").clicked() {
-                    state.open = !state.open;
-                }
-                if !interaction.selected.is_empty() {
-                    ui.small("选中文本 / 分组 · Space 执行");
-                }
-            });
+            theme::chrome_style(ui, editor.light);
+            let colors = theme::chrome_palette(editor.light);
+            let response = ui.add(
+                egui::Button::new((
+                    egui::Atom::grow(),
+                    egui::RichText::new("协作").color(if state.open {
+                        colors.ink
+                    } else {
+                        colors.foreground
+                    }),
+                    egui::Atom::grow(),
+                ))
+                .min_size(egui::vec2(80.0, 36.0))
+                .corner_radius(18)
+                .selected(state.open)
+                .fill(if state.open {
+                    colors.active
+                } else {
+                    colors.surface
+                }),
+            );
+            if response
+                .on_hover_text("打开画布协作 · Pi 引擎\n选中文本或分组，按 Space 提交任务")
+                .clicked()
+            {
+                state.open = !state.open;
+            }
         });
     let selected_runs = bindings.selected_runs(&scene.0, &interaction.selected, &connected);
     let mut command = None;
@@ -446,7 +464,8 @@ pub fn ui(
     let mut connect = false;
     let mut open = state.open || submit_key;
     if open {
-        egui::Window::new("画布 AI 协作").open(&mut open).default_width(430.0).default_pos([700.0, 135.0]).show(ctx, |ui| {
+        egui::Window::new("画布协作").frame(theme::tool_frame(editor.light)).open(&mut open).default_width(430.0).default_pos([700.0, 135.0]).show(ctx, |ui| {
+            theme::tool_style(ui, editor.light);
             egui::ScrollArea::vertical().max_height(650.0).show(ui, |ui| {
                 ui.label("选区是输入；Space 授权规划并执行。最多两个 Agent 同时运行。");
                 if bindings.workflows.iter().any(|b| state.owners.get(&b.workflow_id) != Some(&token)) {
