@@ -200,6 +200,48 @@ fn canvas_only_workflow_runs_and_survives_mio_without_external_project() {
 }
 
 #[test]
+fn all_ready_agents_start_without_task_concurrency_or_call_caps() {
+    let storage = tempfile::tempdir().unwrap();
+    let gate = Arc::new(AtomicBool::new(false));
+    let fake = Arc::new(Fake {
+        gate: Some(gate.clone()),
+        ..Fake::default()
+    });
+    let runtime = Runtime::with_executor(storage.path().into(), fake.clone()).unwrap();
+    runtime
+        .command(Command::Create {
+            project: String::new(),
+            paths: vec![],
+            goal: "并行任务".into(),
+            model: "test/fake".into(),
+            test_command: vec![],
+        })
+        .unwrap();
+    let planned = wait(&runtime, |w| w.draft_plan.is_some());
+    let tasks = (0..20)
+        .map(|i| task(&format!("worker-{i}"), &[], None))
+        .collect();
+    runtime
+        .command(Command::SetPlan {
+            id: planned.id.clone(),
+            plan: Plan { tasks },
+        })
+        .unwrap();
+    gate.store(true, Ordering::Release);
+    runtime.command(Command::Start { id: planned.id }).unwrap();
+    let started = Instant::now();
+    while fake.active.load(Ordering::SeqCst) < 20 && started.elapsed() < Duration::from_secs(8) {
+        thread::sleep(Duration::from_millis(10));
+    }
+    let active = fake.active.load(Ordering::SeqCst);
+    gate.store(false, Ordering::Release);
+    assert_eq!(active, 20);
+    wait(&runtime, |w| {
+        w.runs.len() == 21 && w.runs.iter().all(|r| r.status == Status::Succeeded)
+    });
+}
+
+#[test]
 fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_versions() {
     use crate::document::Document;
     use std::collections::HashSet;
@@ -635,10 +677,10 @@ fn corrupt_storage_is_preserved_and_not_replaced() {
 }
 
 #[test]
-fn pause_revokes_queued_explicit_dispatch_until_resume() {
+fn pause_keeps_running_agents_and_blocks_downstream_until_resume() {
     let storage = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
-    let gate = Arc::new(AtomicBool::new(true));
+    let gate = Arc::new(AtomicBool::new(false));
     let runtime = Runtime::with_executor(
         storage.path().into(),
         Arc::new(Fake {
@@ -647,31 +689,26 @@ fn pause_revokes_queued_explicit_dispatch_until_resume() {
         }),
     )
     .unwrap();
-    create(&runtime, project.path());
-    create(&runtime, project.path());
     let id = create(&runtime, project.path());
+    wait(&runtime, |w| w.draft_plan.is_some());
     runtime
         .command(Command::SetPlan {
             id: id.clone(),
             plan: plan(),
         })
         .unwrap();
+    gate.store(true, Ordering::Release);
+    runtime.command(Command::Start { id: id.clone() }).unwrap();
     runtime.command(Command::Pause { id: id.clone() }).unwrap();
     gate.store(false, Ordering::Release);
-    wait(&runtime, |_| {
-        runtime.snapshot().unwrap().workflows[..2]
-            .iter()
-            .all(|w| w.runs[0].status == Status::Succeeded)
+    let paused = wait(&runtime, |w| {
+        w.runs.iter().all(|r| r.status == Status::Succeeded)
     });
-    assert_eq!(
-        runtime.snapshot().unwrap().workflows[2].runs[0].status,
-        Status::Queued
-    );
+    assert!(paused.paused);
+    assert_eq!(paused.runs.len(), 3);
     runtime.command(Command::Start { id }).unwrap();
-    wait(&runtime, |_| {
-        runtime.snapshot().unwrap().workflows[2]
-            .draft_plan
-            .is_some()
+    wait(&runtime, |w| {
+        w.runs.len() == 5 && w.runs.iter().all(|r| r.status == Status::Succeeded)
     });
     runtime.shutdown().unwrap();
 }

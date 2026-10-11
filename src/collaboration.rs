@@ -15,7 +15,6 @@ use std::{
 
 pub type Result<T> = std::result::Result<T, String>;
 pub const MAX_BYTES: usize = 512 * 1024;
-pub const MAX_TASKS: usize = 8;
 fn id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
@@ -320,8 +319,8 @@ fn validate_files(files: &[SourceFile]) -> Result<()> {
 }
 
 fn validate_plan(plan: &Plan) -> Result<()> {
-    if plan.tasks.is_empty() || plan.tasks.len() > MAX_TASKS {
-        return Err("计划需要 1–8 个任务".into());
+    if plan.tasks.is_empty() {
+        return Err("计划至少需要一个任务".into());
     }
     let ids: BTreeSet<_> = plan.tasks.iter().map(|t| t.id.as_str()).collect();
     if ids.len() != plan.tasks.len() {
@@ -346,11 +345,10 @@ fn validate_plan(plan: &Plan) -> Result<()> {
         {
             return Err("任务需要有效 ID、名称、职责、指令和验收条件".into());
         }
-        if task.dependencies.len() > MAX_TASKS
-            || task
-                .dependencies
-                .iter()
-                .any(|d| !ids.contains(d.as_str()) || d == &task.id)
+        if task
+            .dependencies
+            .iter()
+            .any(|d| !ids.contains(d.as_str()) || d == &task.id)
             || task.dependencies.iter().collect::<BTreeSet<_>>().len() != task.dependencies.len()
         {
             return Err("依赖缺失、重复或指向自身".into());

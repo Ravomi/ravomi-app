@@ -60,13 +60,8 @@ pub(super) fn workflow(
         &name,
         &format!("---\nname: {name}\ndescription: workflow\n---\nDraft"),
     )?;
-    if sources.is_empty()
-        || sources.len() > 64
-        || snapshot.workflows.len() >= 30
-        || model.trim().is_empty()
-        || model.len() > 200
-    {
-        return Err("请选择 1–64 个运行，填写模型；最多保留 30 个流程".into());
+    if sources.is_empty() || sources.len() > 64 || model.trim().is_empty() || model.len() > 200 {
+        return Err("请选择 1–64 个运行并填写模型".into());
     }
     let project = Path::new(project)
         .canonicalize()

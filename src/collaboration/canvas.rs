@@ -190,11 +190,12 @@ impl Bindings {
             };
             for (task_id, title, parent) in tasks(w) {
                 if !binding.agents.iter().any(|a| a.task_id == task_id) {
-                    let column = layer(w, &task_id, MAX_TASKS);
+                    let depth = w.plan.as_ref().map_or(1, |p| p.tasks.len());
+                    let column = layer(w, &task_id, depth);
                     let row = binding
                         .agents
                         .iter()
-                        .filter(|a| layer(w, &a.task_id, MAX_TASKS) == column)
+                        .filter(|a| layer(w, &a.task_id, depth) == column)
                         .count();
                     let log = doc
                         .create_text_node([

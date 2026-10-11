@@ -465,7 +465,7 @@ pub fn ui(
         egui::Window::new("画布协作").frame(theme::tool_frame(editor.light)).open(&mut open).default_width(430.0).default_pos([700.0, 135.0]).show(ctx, |ui| {
             theme::tool_style(ui, editor.light);
             egui::ScrollArea::vertical().max_height(650.0).show(ui, |ui| {
-                ui.label("选区是输入；Space 授权规划并执行。最多两个 Agent 同时运行。");
+                ui.label("选区是输入；Space 开始任务。就绪的 Agent 可并行运行。");
                 if bindings.workflows.iter().any(|b| state.owners.get(&b.workflow_id) != Some(&token)) {
                     ui.label("项目内历史保持为归档；连接本机流程后才接收更新与控制运行。");
                     if ui.add_enabled(!state.busy && editor.active.is_none() && !scene.0.in_transaction(), egui::Button::new("连接本机已保存流程")).clicked() { connect = true; }
