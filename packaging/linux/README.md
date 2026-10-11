@@ -1,6 +1,6 @@
 # Ravomi Linux 安装与文档缩略图
 
-本目录提供现有 Bevy 原生画布的安装入口，以及 `.mio` 项目和 `.prg` 兼容画布的离线预览，不包含完整 React/Tauri 发布或 Agent 执行环境。产品与阶段状态见 [README](../../README.md)、[PRD](../../PRD.md)；React/Tauri 入口见 [app/README](../../app/README.md)。
+本目录提供 Bevy 原生画布及内置 Pi 代码协作引擎的安装入口，以及 `.mio` 项目和 `.prg` 兼容画布的离线预览；不包含完整 React/Tauri 发布。产品与阶段状态见 [README](../../README.md)、[PRD](../../PRD.md)；React/Tauri 入口见 [app/README](../../app/README.md)。
 
 品牌显示与资源替换遵循 [BRAND](../../assets/branding/BRAND.md)，UI/UX 及 AI 实现规则见 [DESIGN](../../DESIGN.md)、[AI_UI_RULES](../../AI_UI_RULES.md)。发布前单独验收桌面图标的小尺寸识别、窗口文字与清晰度；现有兼容图标和旧式缩略图不会因规范更新自动符合新设计。保留既有程序 ID、用户数据路径和 MIME 的兼容性。
 
@@ -10,10 +10,13 @@
 
 ```sh
 cargo build --release --locked
+npm --prefix app run build:agent
 bash packaging/linux/install-app.sh
 ```
 
 需要 `desktop-file-utils` 和 `shared-mime-info`。安装后在应用菜单搜索 Ravomi。为兼容已有安装，程序路径暂保留 `~/.local/bin/graplu`，启动项 ID 与旧图标资源保留在 `${XDG_DATA_HOME:-~/.local/share}`，后续由统一打包配置迁移。安装会注册 `.mio` 与兼容 `.prg` 类型，不需要 sudo，不更改默认打开应用。安装脚本也接受已编译二进制的路径作为第一个参数。
+
+安装入口始终启动完整原生画布。Pi 可执行文件放在 `~/.local/bin/ravomi-agent`，随附许可与引擎锁文件放在用户数据目录 `ravomi/engine/`；不依赖外部全局 Pi。可将引擎二进制路径作为安装脚本的第二个参数。引擎构建环境与版本见 [agent-engine](../../app/agent-engine/README.md)。原生协作使用方法见 [画布协作验收](../../validation/canvas-ai-workflows.md)。
 
 ## Linux 文件管理器缩略图
 
