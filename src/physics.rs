@@ -269,6 +269,7 @@ fn spawn_body(
 fn synchronize(
     mut commands: Commands,
     mut scene: ResMut<Scene>,
+    display: Option<Res<sections::Display>>,
     mut state: ResMut<PhysicsEditor>,
     mut clock: ResMut<Time<Physics>>,
     mut bodies: Query<(
@@ -351,10 +352,21 @@ fn synchronize(
             return;
         }
     }
+    // Collapsed sections retain their expanded document bounds. Use the same
+    // projected geometry as rendering, including measurements arriving later.
+    for (_, mut body, .., mut collider) in &mut bodies {
+        let graph = display.as_ref().map_or(&scene.0.graph, |d| d.graph(&scene));
+        let Some(node) = graph.nodes.get(body.index).filter(|n| n.id == body.id) else {
+            continue;
+        };
+        let size = Vec2::new(node.rect[2], node.rect[3]);
+        if body.size != size {
+            *collider = Collider::rectangle(size.x, size.y);
+            body.size = size;
+        }
+    }
     if state.reset || state.revision != scene.0.revision {
-        for (entity, mut body, mut pos, mut transform, mut velocity, rigid, layers, mut collider) in
-            &mut bodies
-        {
+        for (entity, body, mut pos, mut transform, mut velocity, rigid, layers, _) in &mut bodies {
             let Some(n) = scene.0.nodes.get(body.index).filter(|n| n.id == body.id) else {
                 continue;
             };
@@ -363,11 +375,6 @@ fn synchronize(
                 transform.translation = pos.0.extend(0.0);
             }
             velocity.set_if_neq(LinearVelocity::ZERO);
-            let size = Vec2::new(n.rect[2], n.rect[3]);
-            if body.size != size {
-                *collider = Collider::rectangle(size.x, size.y);
-                body.size = size;
-            }
             let next_rigid = if body.locked {
                 RigidBody::Static
             } else if state.selection.contains(&body.index) {
@@ -1121,6 +1128,53 @@ mod tests {
         let inner = doc.create_group(&HashSet::from([0, 1, 2])).unwrap();
         let outer = doc.create_group(&HashSet::from([inner])).unwrap();
         (doc, outer)
+    }
+
+    #[test]
+    fn collapsed_collision_tracks_projection_and_restores_expanded_size() {
+        let (mut doc, group) = collision_group();
+        doc.set_sections_collapsed(&HashSet::from([group]), true)
+            .unwrap();
+        let mut app = group_drag_app(doc);
+        let original = app.world().resource::<Scene>().0.nodes[group].rect;
+        let mut display = sections::Display::new(true);
+        display.graph = Some(Graph {
+            nodes: app.world().resource::<Scene>().0.nodes.clone(),
+            edges: vec![],
+            attachments: default(),
+            counts: default(),
+        });
+        display.graph.as_mut().unwrap().nodes[group].rect[2..4].copy_from_slice(&[80.0, 40.0]);
+        app.insert_resource(display);
+        for size in [Vec2::new(80.0, 40.0), Vec2::new(120.0, 64.0)] {
+            app.world_mut()
+                .resource_mut::<sections::Display>()
+                .graph
+                .as_mut()
+                .unwrap()
+                .nodes[group]
+                .rect[2..4]
+                .copy_from_slice(&size.to_array());
+            app.update();
+            let world = app.world_mut();
+            let mut query = world.query::<(&BodyNode, &Position)>();
+            let (body, position) = query
+                .iter(world)
+                .find(|(body, _)| body.index == group)
+                .unwrap();
+            assert_eq!(body.size, size);
+            assert_eq!(
+                position.0,
+                center(&world.resource::<Scene>().0.nodes[group])
+            );
+            assert_eq!(world.resource::<Scene>().0.nodes[group].rect, original);
+        }
+        app.world_mut().resource_mut::<sections::Display>().graph = None;
+        app.update();
+        let world = app.world_mut();
+        let mut query = world.query::<&BodyNode>();
+        let body = query.iter(world).find(|body| body.index == group).unwrap();
+        assert_eq!(body.size, Vec2::new(original[2], original[3]));
     }
 
     #[test]
