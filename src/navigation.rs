@@ -6,6 +6,10 @@ use bevy::{
 };
 use winit::event::{TouchPhase, WindowEvent};
 
+// Apply sensitivity after converting physical input to logical screen distance.
+const TRACKPAD_PAN_SPEED: f32 = 2.0;
+const TRACKPAD_ZOOM_SPEED: f32 = 1.5;
+
 #[derive(Default)]
 pub struct GestureAnchor(Option<Vec2>);
 
@@ -108,9 +112,15 @@ pub fn navigate(
                 wheel.cancel();
                 let delta = Vec2::new(event.x, event.y) / window.resolution.scale_factor();
                 if command {
-                    zoom_at(cursor, window, transform, projection, delta.y * 0.002);
+                    zoom_at(
+                        cursor,
+                        window,
+                        transform,
+                        projection,
+                        delta.y * 0.002 * TRACKPAD_ZOOM_SPEED,
+                    );
                 } else {
-                    pan_by(transform, projection.scale, delta);
+                    pan_by(transform, projection.scale, delta * TRACKPAD_PAN_SPEED);
                 }
             }
         }
@@ -132,7 +142,13 @@ pub fn navigate(
                 wheel.cancel();
                 anchor.0 = Some(cursor);
                 if delta.is_finite() {
-                    zoom_at(cursor, window, transform, projection, delta as f32);
+                    zoom_at(
+                        cursor,
+                        window,
+                        transform,
+                        projection,
+                        delta as f32 * TRACKPAD_ZOOM_SPEED,
+                    );
                 }
             }
             WindowEvent::PinchGesture {
@@ -143,7 +159,13 @@ pub fn navigate(
                 if let Some(center) = anchor.0
                     && delta.is_finite()
                 {
-                    zoom_at(center, window, transform, projection, delta as f32);
+                    zoom_at(
+                        center,
+                        window,
+                        transform,
+                        projection,
+                        delta as f32 * TRACKPAD_ZOOM_SPEED,
+                    );
                 }
             }
             WindowEvent::PanGesture {
@@ -152,7 +174,8 @@ pub fn navigate(
                 ..
             } => {
                 if let Some(center) = anchor.0 {
-                    let delta = Vec2::new(delta.x, delta.y) / window.resolution.scale_factor();
+                    let delta = Vec2::new(delta.x, delta.y) / window.resolution.scale_factor()
+                        * TRACKPAD_PAN_SPEED;
                     if delta.is_finite() && (center + delta).is_finite() {
                         pan_by(transform, projection.scale, delta);
                         anchor.0 = Some(center + delta);

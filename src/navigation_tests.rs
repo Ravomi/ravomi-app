@@ -192,8 +192,8 @@ fn pixel_pan_uses_logical_distance_at_each_dpi() {
         h.wheel(h.window, MouseScrollUnit::Pixel, logical_delta * dpi);
         h.app.update();
         assert_eq!(h.scale(), 4.0);
-        assert!(h.viewport(before).distance(h.cursor + logical_delta) < 0.005);
-        assert!((h.anchor() - before).distance(Vec2::new(-48.0, -28.0)) < 0.005);
+        assert!(h.viewport(before).distance(h.cursor + logical_delta * 2.0) < 0.005);
+        assert!((h.anchor() - before).distance(Vec2::new(-96.0, -56.0)) < 0.005);
         let after = h.anchor();
         h.app.update();
         h.assert_anchor(after);
@@ -208,11 +208,11 @@ fn keyboard_focus_does_not_swallow_canvas_pan_or_pinch_start() {
     let delta = Vec2::new(12.0, -7.0);
     h.wheel(h.window, MouseScrollUnit::Pixel, delta * 1.75);
     h.app.update();
-    assert!(h.viewport(before).distance(h.cursor + delta) < 0.005);
+    assert!(h.viewport(before).distance(h.cursor + delta * 2.0) < 0.005);
     let anchor = h.anchor();
     h.raw_pinch(h.native, NativePhase::Started, 0.1);
     h.app.update();
-    assert!((h.scale() - 4.0 * (-0.1_f32).exp()).abs() < 1e-5);
+    assert!((h.scale() - 4.0 * (-0.15_f32).exp()).abs() < 1e-5);
     h.assert_anchor(anchor);
 }
 
@@ -259,7 +259,7 @@ fn control_pixel_scroll_zooms_instead_of_panning_at_each_dpi() {
             Vec2::new(24.0, 60.0) * dpi,
         );
         h.app.update();
-        assert!((h.scale() - 4.0 * (-0.12_f32).exp()).abs() < 1e-5);
+        assert!((h.scale() - 4.0 * (-0.18_f32).exp()).abs() < 1e-5);
         h.assert_anchor(anchor);
     }
 }
@@ -363,24 +363,24 @@ fn combined_pan_and_pinch_preserve_a_moving_anchor_without_lifting_fingers() {
         h.raw_pan(h.native, NativePhase::Moved, first * dpi);
         h.raw_pinch(h.native, NativePhase::Moved, 0.12);
         h.app.update();
-        expected += first;
+        expected += first * 2.0;
         assert!(h.viewport(anchor).distance(expected) < 0.005);
-        assert!((h.scale() - 4.0 * (-0.12_f32).exp()).abs() < 1e-5);
+        assert!((h.scale() - 4.0 * (-0.18_f32).exp()).abs() < 1e-5);
 
         // Reverse event order on the next frame; both gestures still use the same center.
         let second = Vec2::new(-3.0, 8.0);
         h.raw_pinch(h.native, NativePhase::Moved, -0.04);
         h.raw_pan(h.native, NativePhase::Moved, second * dpi);
         h.app.update();
-        expected += second;
+        expected += second * 2.0;
         assert!(h.viewport(anchor).distance(expected) < 0.005);
-        assert!((h.scale() - 4.0 * (-0.08_f32).exp()).abs() < 1e-5);
+        assert!((h.scale() - 4.0 * (-0.12_f32).exp()).abs() < 1e-5);
 
         // A translation-only phase does not require ending or restarting the pinch.
         let third = Vec2::new(5.0, 2.0);
         h.raw_pan(h.native, NativePhase::Moved, third * dpi);
         h.app.update();
-        expected += third;
+        expected += third * 2.0;
         assert!(h.viewport(anchor).distance(expected) < 0.005);
         let scale = h.scale();
         h.raw_pinch(h.native, NativePhase::Moved, 0.06);
