@@ -52,7 +52,7 @@ npm run tauri build -- --no-bundle
 
 运行记录由 Rust 保存于 Tauri app data 的 `code-collaboration/workflows.json`，不混入 `.prg`。重启不自动重发；在途任务先核对再重试，写入失败保留当前进程的待保存成果并阻止继续派发。输入与产物含所选源码，备份运行目录时按项目数据处理。
 
-明确附加到项目的流程历史随 `.mio` 保存，保留附加时的固定证据；后续运行更新需再次附加。保存共用 Rust 的 schema 2 快照、正文去重与校验链路，打开归档不恢复执行。与 Bevy 的当前文档流程连接规则区别见 [存储规范](../STORAGE.md)。
+明确附加到项目的流程历史随 `.mio` 保存，保留附加时的固定证据；后续运行更新需再次附加。保存共用 Rust 的 SQLite schema 3 事务、正文去重与校验链路，兼容读取 ZIP v1/v2，打开归档不恢复执行。与 Bevy 的当前文档流程连接规则区别见 [存储规范](../STORAGE.md)。
 
 引擎来源、版本、构建与许可见 [agent-engine](agent-engine/README.md)。此 React/Tauri 入口独立于 Bevy；框选 Agent、折叠执行节点和 Skill 提炼已在默认原生画布的“Pi · 画布协作”入口实现，见 [验收记录](../validation/canvas-ai-workflows.md)。两个入口的运行存储分开。图像生成和外部 Pi 会话续聊仍未实现。
 

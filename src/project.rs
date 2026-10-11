@@ -17,7 +17,10 @@ pub const MANIFEST_ENTRY: &str = "manifest.json";
 pub use crate::project_history::HISTORY_ENTRY;
 pub const LEGACY_PREFIX: &str = "extensions/legacy/";
 const FORMAT_ID: &str = "ravomi-project";
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
+pub const SQLITE_SCHEMA_VERSION: u32 = SCHEMA_VERSION;
+pub const ZIP_SCHEMA_VERSION: u32 = 2;
+pub const SQLITE_FEATURE: &str = "sqlite-graph-v1";
 pub const SNAPSHOT_FEATURE: &str = "portable-snapshot-v1";
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAX_HISTORY_BYTES: u64 = 64 * 1024 * 1024;
@@ -44,7 +47,7 @@ impl Default for Manifest {
             schema_version: SCHEMA_VERSION,
             project_id: uuid::Uuid::new_v4().to_string(),
             canvas_schema_version: 1,
-            required_features: vec![SNAPSHOT_FEATURE.into()],
+            required_features: vec![SQLITE_FEATURE.into()],
             extensions: BTreeMap::new(),
         }
     }
@@ -53,7 +56,10 @@ impl Default for Manifest {
 impl Manifest {
     pub fn validate(&self) -> Result<()> {
         if self.format != FORMAT_ID
-            || !matches!(self.schema_version, 1 | SCHEMA_VERSION)
+            || !matches!(
+                self.schema_version,
+                1 | ZIP_SCHEMA_VERSION | SQLITE_SCHEMA_VERSION
+            )
             || self.canvas_schema_version != 1
         {
             return Err("不支持的 Ravomi 项目格式或版本，请使用兼容的应用打开".into());
@@ -61,7 +67,9 @@ impl Manifest {
         if uuid::Uuid::parse_str(&self.project_id).is_err() {
             return Err("项目身份无效".into());
         }
-        let expected = if self.schema_version == SCHEMA_VERSION {
+        let expected = if self.schema_version == SQLITE_SCHEMA_VERSION {
+            vec![SQLITE_FEATURE.to_owned()]
+        } else if self.schema_version == ZIP_SCHEMA_VERSION {
             vec![SNAPSHOT_FEATURE.to_owned()]
         } else {
             vec![]
@@ -78,8 +86,15 @@ impl Manifest {
 
     pub(crate) fn for_save(&self) -> Self {
         let mut manifest = self.clone();
-        manifest.schema_version = SCHEMA_VERSION;
+        manifest.schema_version = ZIP_SCHEMA_VERSION;
         manifest.required_features = vec![SNAPSHOT_FEATURE.into()];
+        manifest
+    }
+
+    pub(crate) fn for_database(&self) -> Self {
+        let mut manifest = self.clone();
+        manifest.schema_version = SQLITE_SCHEMA_VERSION;
+        manifest.required_features = vec![SQLITE_FEATURE.into()];
         manifest
     }
 }
@@ -165,7 +180,10 @@ pub(crate) fn inspect<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Resul
     let manifest: Manifest =
         serde_json::from_slice(&read_entry(archive, MANIFEST_ENTRY, MAX_MANIFEST_BYTES)?)?;
     manifest.validate()?;
-    let (history, bindings) = if manifest.schema_version == SCHEMA_VERSION {
+    if manifest.schema_version == SQLITE_SCHEMA_VERSION {
+        return Err("SQLite 项目不能使用 ZIP 容器".into());
+    }
+    let (history, bindings) = if manifest.schema_version == ZIP_SCHEMA_VERSION {
         crate::project_package::read(archive, &manifest)?
     } else {
         (

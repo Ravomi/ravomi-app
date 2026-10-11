@@ -21,6 +21,75 @@ SPEC.loader.exec_module(thumbnailer)
 
 
 class ThumbnailTests(unittest.TestCase):
+    def test_sqlite_preview_is_read_only_and_checks_content_and_version(self):
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, "project.mio")
+            output = Path(directory, "preview.png")
+            conn = sqlite3.connect(source)
+            conn.executescript(
+                (MODULE_PATH.parents[2] / "src/project_sqlite.sql").read_text()
+            )
+            conn.execute("PRAGMA application_id=1296650035")
+            conn.execute("PRAGMA user_version=3")
+            manifest = {
+                "format": "ravomi-project",
+                "schemaVersion": 3,
+                "canvasSchemaVersion": 1,
+                "requiredFeatures": ["sqlite-graph-v1"],
+                "projectId": "90d4ef64-087e-476b-8a2a-dfd03f1b9e59",
+            }
+            conn.execute(
+                "INSERT INTO project_meta VALUES(1,?,0)",
+                (json.dumps(manifest).encode(),),
+            )
+            stage = [
+                {
+                    "_": "TextNode",
+                    "uuid": "note",
+                    "text": "SQLite 画布",
+                    "collisionBox": {
+                        "shapes": [
+                            {
+                                "_": "Rectangle",
+                                "location": {"x": 0, "y": 0},
+                                "size": {"x": 160, "y": 80},
+                            }
+                        ]
+                    },
+                }
+            ]
+            for data in [b"[null]", json.dumps(stage[0]).encode()]:
+                conn.execute(
+                    "INSERT INTO objects VALUES(?,?)",
+                    (hashlib.sha256(data).hexdigest(), data),
+                )
+            conn.execute(
+                "INSERT INTO canvas_root VALUES(1,?)",
+                (hashlib.sha256(b"[null]").hexdigest(),),
+            )
+            conn.execute(
+                "INSERT INTO canvas_records VALUES('note','/0','TextNode',?)",
+                (hashlib.sha256(json.dumps(stage[0]).encode()).hexdigest(),),
+            )
+            conn.commit()
+            before = source.read_bytes()
+            thumbnailer.render(source, output, 64)
+            self.assertTrue(output.exists())
+            self.assertEqual(source.read_bytes(), before)
+            conn.execute(
+                "UPDATE objects SET data=? WHERE hash=?",
+                (b"damaged", hashlib.sha256(b"[null]").hexdigest()),
+            )
+            conn.commit()
+            with self.assertRaises(ValueError):
+                thumbnailer.sqlite_preview(source)
+            conn.execute("PRAGMA user_version=999")
+            with self.assertRaises(ValueError):
+                thumbnailer.sqlite_preview(source)
+            conn.close()
+
     def test_mio_preview_reads_native_canvas_and_assets_without_touching_source(self):
         import io
 

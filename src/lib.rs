@@ -8,6 +8,7 @@ pub mod edit_protocol;
 pub mod project;
 pub mod project_history;
 mod project_package;
+mod project_sqlite;
 pub mod recovery;
 pub mod session;
 pub mod storage;
@@ -19,12 +20,20 @@ pub struct ProjectFile {
 
 impl ProjectFile {
     pub fn load(path: &Path) -> Result<Self> {
+        if project_sqlite::is_database(path)? {
+            return Ok(project_sqlite::load(path)?.file);
+        }
         Self::read(File::open(path)?)
     }
 
     /// Decode the same snapshot that the document retains for lossless saving
     /// and external-change detection, without reopening a mutable disk path.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.starts_with(project_sqlite::MAGIC) {
+            let mut temp = tempfile::NamedTempFile::new()?;
+            std::io::Write::write_all(&mut temp, bytes)?;
+            return Self::load(temp.path());
+        }
         Self::read(std::io::Cursor::new(bytes))
     }
 

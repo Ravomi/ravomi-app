@@ -148,6 +148,7 @@ Rust 标准库处理文件、CLI、集合、计时和结果写入；社区库处
 |---|---|---|---|
 | Bevy | 0.19.1 | MIT OR Apache-2.0 | Rust 1.95；2D/wgpu、ECS、窗口、输入和文字 |
 | zip | 8.2.0 | MIT | Rust 1.88；ZIP，启用 deflate 解码 |
+| rusqlite | 0.40.2 | MIT | 内置 SQLite 3.53.2（公有领域）；`.mio` 事务保存 |
 | rmp-serde | 1.3.1 | MIT | Rust 1.85；MessagePack → serde_json 值 |
 | serde_json | 1.0.151 | MIT OR Apache-2.0 | Rust 1.71；读取数据模型、输出报告 |
 | resvg | 0.48.1 | MIT OR Apache-2.0 | Rust 1.85；SVG 解析与栅格化 |
@@ -177,4 +178,4 @@ cargo fmt --check
 
 ## 原生项目与存储边界
 
-默认项目后缀为 `.mio`，结构与版本以 [STORAGE.md](STORAGE.md) 为准。`src/project.rs` 负责容器清单与布局，`src/project_history.rs` 负责显式选择的只读协作归档，`Document` 负责保存与往返校验，`src/storage.rs` 复用本机路径和原子写入工具。`.prg` 仍按原格式读写，另存为 `.mio` 完成转换；无法保留协作历史或原生扩展时拒绝降级至 `.prg`。本机 `Runtime` 不从项目归档恢复执行，画布撤销栈也不作为持久化运行历史。
+默认项目后缀为 `.mio`，当前为 SQLite schema 3，结构与版本以 [STORAGE.md](STORAGE.md) 为准。`src/project_sqlite.rs` 和同名 `.sql` 负责记录、关系与事务，`src/project.rs` / `src/project_package.rs` 保留版本清单与旧 ZIP 兼容，`src/project_history.rs` 负责显式选择的只读协作归档，`Document` 负责保存与往返校验。已有数据库事务更新变化行；首次保存、迁移与恢复代使用临时文件发布。`.prg` 仍按原格式读写，另存为 `.mio` 完成转换；无法保留协作历史或原生扩展时拒绝降级。本机 Runtime JSON 尚未迁移，不从项目归档恢复执行，画布撤销栈不作为持久化运行历史。

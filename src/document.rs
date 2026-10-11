@@ -341,7 +341,17 @@ impl Document {
         }
     }
     pub fn open(path: &Path) -> Result<Self> {
-        let bytes = fs::read(path)?;
+        let (bytes, disk_bytes, native_manifest) = if crate::project_sqlite::is_database(path)? {
+            let loaded = crate::project_sqlite::load(path)?;
+            (
+                loaded.compatibility_archive()?,
+                loaded.disk_bytes,
+                Some(loaded.manifest),
+            )
+        } else {
+            let disk_bytes = fs::read(path)?;
+            (disk_bytes.clone(), disk_bytes, None)
+        };
         let mut archive = zip::ZipArchive::new(Cursor::new(&bytes))?;
         let contents = project::inspect(&mut archive)?;
         let file = ProjectFile::from_inspected(&mut archive, &contents)?;
@@ -378,11 +388,11 @@ impl Document {
         doc.reserved_ids = reserved_ids;
         doc.overview_excluded = overview_excluded;
         doc.sync_members = sync_members;
-        doc.manifest = contents.manifest;
+        doc.manifest = native_manifest.unwrap_or(contents.manifest);
         doc.archived_history = contents.history;
         doc.path = Some(fs::canonicalize(path)?);
         doc.archive = Some(bytes.clone());
-        doc.disk_bytes = Some(bytes);
+        doc.disk_bytes = Some(disk_bytes);
         Ok(doc)
     }
     pub fn dirty(&self) -> bool {
@@ -1631,7 +1641,10 @@ impl Document {
         {
             return Err("磁盘文件已被其他程序更改，请另存为以保留两个版本".into());
         }
-        self.disk_bytes = Some(self.write_archive(destination, true)?);
+        self.disk_bytes = Some(self.write_archive(destination, true, true)?);
+        if Format::for_destination(destination)? == Format::Mio {
+            self.manifest = self.manifest.for_database();
+        }
         self.path = Some(destination.to_path_buf());
         self.history.set_saved();
         self.project_dirty = false;
@@ -1645,7 +1658,7 @@ impl Document {
         if self.in_transaction() {
             return Err("请先结束当前编辑或拖动，再创建恢复副本".into());
         }
-        self.write_archive(destination, false)?;
+        self.write_archive(destination, false, true)?;
         Ok(())
     }
 
@@ -1671,7 +1684,12 @@ impl Document {
         Ok(snapshot)
     }
 
-    fn write_archive(&self, destination: &Path, replace: bool) -> Result<Vec<u8>> {
+    pub(crate) fn write_archive(
+        &self,
+        destination: &Path,
+        replace: bool,
+        sqlite: bool,
+    ) -> Result<Vec<u8>> {
         let bytes = self
             .archive
             .as_ref()
@@ -1718,6 +1736,65 @@ impl Document {
         }
         let mut stage = Vec::new();
         rmpv::encode::write_value(&mut stage, &value)?;
+        if target == Format::Mio && sqlite {
+            let file = ProjectFile {
+                stage: rmp_serde::from_slice(&stage)?,
+                attachments: self.attachments.clone(),
+            };
+            let check = Graph::from_file(ProjectFile {
+                stage: file.stage.clone(),
+                attachments: file.attachments.clone(),
+            })?;
+            if !same_nodes(&check.nodes, &self.nodes) || !same_edges(&check, &self.graph) {
+                return Err("保存往返校验不一致，原文件未修改".into());
+            }
+            let mut extensions = BTreeMap::new();
+            for index in 0..archive.len() {
+                let entry = archive.by_index(index)?;
+                let name = entry.name();
+                if name == source.stage()
+                    || name.starts_with(source.assets())
+                    || (source == Format::Mio
+                        && (matches!(name, project::MANIFEST_ENTRY | project::HISTORY_ENTRY)
+                            || (source_contents.manifest.schema_version
+                                == project::ZIP_SCHEMA_VERSION
+                                && crate::project_package::managed(name))))
+                {
+                    continue;
+                }
+                let name = if source == Format::Prg {
+                    format!("{}{name}", project::LEGACY_PREFIX)
+                } else {
+                    name.to_owned()
+                };
+                project::validate_entry_name(&name)?;
+                if crate::project_package::managed(&name) {
+                    return Err("旧扩展占用新格式保留路径，未覆盖原文件".into());
+                }
+                if entry.size() > 64 * 1024 * 1024 {
+                    return Err("扩展条目超过 64 MiB".into());
+                }
+                let mut bytes = Vec::new();
+                entry.take(64 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+                if extensions.insert(name, bytes).is_some() {
+                    return Err("重复项目扩展".into());
+                }
+            }
+            return crate::project_sqlite::save(
+                destination,
+                replace,
+                crate::project_sqlite::Save {
+                    file: &file,
+                    manifest: &self.manifest,
+                    history: &self.archived_history,
+                    extensions: &extensions,
+                    revision: self.revision,
+                    expected: (self.path.as_deref() == Some(destination))
+                        .then_some(self.disk_bytes.as_deref())
+                        .flatten(),
+                },
+            );
+        }
         let parent = destination
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -1761,7 +1838,7 @@ impl Document {
                             file.name(),
                             project::MANIFEST_ENTRY | project::HISTORY_ENTRY
                         ) || (source_contents.manifest.schema_version
-                            == project::SCHEMA_VERSION
+                            == project::ZIP_SCHEMA_VERSION
                             && crate::project_package::managed(file.name())))
                     {
                         continue;
@@ -4575,34 +4652,31 @@ mod tests {
             original
         );
 
-        let mut zip = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
-        assert!(zip.by_name("stage.msgpack").is_err());
-        assert!(zip.by_name("canvas/stage.msgpack").is_ok());
+        assert!(crate::project_sqlite::is_database(&path).unwrap());
+        let saved = crate::project_sqlite::load(&path).unwrap();
         assert_eq!(
-            project::read_entry(&mut zip, "extensions/legacy/manifest.json", 1024).unwrap(),
+            saved.extensions["extensions/legacy/manifest.json"],
             br#"{"format":"third-party-extension"}"#
         );
         assert_eq!(
-            project::read_entry(&mut zip, "extensions/legacy/canvas/notes.bin", 1024).unwrap(),
+            saved.extensions["extensions/legacy/canvas/notes.bin"],
             b"opaque legacy data"
         );
         assert_eq!(
-            project::read_entry(&mut zip, "extensions/legacy/unknown.bin", 1024).unwrap(),
+            saved.extensions["extensions/legacy/unknown.bin"],
             [0, 255, 4, 128]
         );
-        assert_eq!(
-            project::read_entry(&mut zip, "assets/image.png", 1024).unwrap(),
-            [0, 255, 1]
-        );
-        drop(zip);
+        assert_eq!(saved.file.attachments["image.png"], [0, 255, 1]);
 
         // An older producer supplies v1 metadata and opaque extensions. Saving
         // upgrades the container while preserving these independent entries.
-        let mut source = zip::ZipArchive::new(Cursor::new(fs::read(&path).unwrap())).unwrap();
+        let mut source =
+            zip::ZipArchive::new(Cursor::new(saved.compatibility_archive().unwrap())).unwrap();
         let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
         for index in 0..source.len() {
             let entry = source.by_index(index).unwrap();
             if entry.name() == project::MANIFEST_ENTRY
+                || entry.name() == project::HISTORY_ENTRY
                 || crate::project_package::managed(entry.name())
             {
                 continue;
@@ -4645,13 +4719,10 @@ mod tests {
         assert_eq!(again.project_id(), id);
         assert_eq!(again.nodes[0].text, "更新后的画布");
         assert_eq!(again.manifest, document.manifest);
-        let mut zip = zip::ZipArchive::new(fs::File::open(copy).unwrap()).unwrap();
+        let saved = crate::project_sqlite::load(&copy).unwrap();
+        assert_eq!(saved.extensions["extensions/future/data.bin"], [7, 0, 128]);
         assert_eq!(
-            project::read_entry(&mut zip, "extensions/future/data.bin", 1024).unwrap(),
-            [7, 0, 128]
-        );
-        assert_eq!(
-            project::read_entry(&mut zip, "extensions/legacy/unknown.bin", 1024).unwrap(),
+            saved.extensions["extensions/legacy/unknown.bin"],
             [0, 255, 4, 128]
         );
         let parsed = ProjectFile::load(&path).unwrap();

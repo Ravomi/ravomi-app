@@ -21,6 +21,101 @@ from gi.repository import GLib, Pango, PangoCairo
 
 MAX_JSON = 16 * 1024 * 1024
 NATIVE_MAGIC = b"PGDOC4\r\n"
+SQLITE_MAGIC = b"SQLite format 3\0"
+
+
+def sqlite_preview(source):
+    """Read a bounded canvas projection in one read-only SQLite transaction."""
+    import hashlib
+    import sqlite3
+    import uuid
+    from pathlib import Path
+
+    if os.path.getsize(source) > 1024 * 1024 * 1024:
+        raise ValueError("SQLite project exceeds preview size limit")
+    conn = sqlite3.connect(Path(source).resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        conn.execute("PRAGMA query_only=ON")
+        conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_JSON)
+        conn.execute("BEGIN")
+        if (
+            conn.execute("PRAGMA application_id").fetchone()[0] != 0x4D494F33
+            or conn.execute("PRAGMA user_version").fetchone()[0] != 3
+        ):
+            raise ValueError("Unsupported SQLite project")
+        raw_manifest = conn.execute(
+            "SELECT manifest FROM project_meta WHERE id=1"
+        ).fetchone()[0]
+        if len(raw_manifest) > 65536:
+            raise ValueError("Oversized project manifest")
+        manifest = json.loads(raw_manifest)
+        if (
+            manifest.get("format") != "ravomi-project"
+            or manifest.get("schemaVersion") != 3
+            or manifest.get("canvasSchemaVersion") != 1
+            or manifest.get("requiredFeatures") != ["sqlite-graph-v1"]
+        ):
+            raise ValueError("Unsupported SQLite project requirements")
+        uuid.UUID(manifest["projectId"])
+        total = 0
+
+        def body(identifier):
+            nonlocal total
+            row = conn.execute(
+                "SELECT data FROM objects WHERE hash=?", (identifier,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("Missing project object")
+            data = row[0]
+            total += len(data)
+            if total > 64 * 1024 * 1024:
+                raise ValueError("Project preview exceeds size limit")
+            if hashlib.sha256(data).hexdigest() != identifier:
+                raise ValueError("Damaged project object")
+            return data
+
+        root = conn.execute("SELECT body FROM canvas_root WHERE id=1").fetchone()
+        stage = json.loads(body(root[0]))
+        records = conn.execute(
+            "SELECT path,body FROM canvas_records LIMIT 5001"
+        ).fetchall()
+        if len(records) > 5000:
+            raise ValueError("Too many canvas records")
+        for path, identifier in sorted(
+            records, key=lambda record: record[0].count("/")
+        ):
+            if not path.startswith("/") or path.count("/") > 128:
+                raise ValueError("Invalid canvas record path")
+            parts = [
+                part.replace("~1", "/").replace("~0", "~")
+                for part in path[1:].split("/")
+            ]
+            target = stage
+            for part in parts[:-1]:
+                target = target[int(part)] if isinstance(target, list) else target[part]
+            key = int(parts[-1]) if isinstance(target, list) else parts[-1]
+            if target[key] is not None:
+                raise ValueError("Duplicate canvas record")
+            target[key] = json.loads(body(identifier))
+        graph = legacy_graph(stage)
+        assets = dict(conn.execute("SELECT name,body FROM attachments LIMIT 16385"))
+        if len(assets) > 16384:
+            raise ValueError("Too many project attachments")
+        attachments = {}
+        for obj in graph["objects"]:
+            identifier = obj["properties"].get("preview_attachment")
+            if not identifier or identifier in attachments:
+                continue
+            for name, digest in assets.items():
+                if name.startswith(identifier + "."):
+                    attachments[identifier] = image_surface(
+                        body(digest), name.rsplit(".", 1)[-1]
+                    )
+                    break
+        return graph, attachments
+    finally:
+        conn.close()
 
 
 def native_preview(source):
@@ -668,8 +763,10 @@ def render(input_path, output, requested_size, requested_height=None):
         else 2 * max(32, min(1024, int(requested_height)))
     )
     with open(input_path, "rb") as stream:
-        is_native = stream.read(8) == NATIVE_MAGIC
-    if is_native:
+        magic = stream.read(16)
+    if magic == SQLITE_MAGIC:
+        graph, attachments = sqlite_preview(input_path)
+    elif magic[:8] == NATIVE_MAGIC:
         graph, attachments = native_preview(input_path)
     else:
         if os.path.getsize(input_path) > 256 * 1024 * 1024:

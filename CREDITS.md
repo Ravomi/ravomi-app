@@ -22,6 +22,7 @@ Graplu 从 Project Graph 的 Bevy 原型迁入，迁移前的贡献不能仅凭�
 | --- | --- | --- |
 | Project Graph 及其社区 | Bevy 原型来源、节点图交互、`.prg` 格式与教程参考 | [迁移说明](MIGRATION.md) |
 | Bevy 与 bevy_egui / egui | 应用调度、渲染、输入与界面 | [开发指南](DEVELOPMENT.md)、[依赖清单](Cargo.toml) |
+| SQLite / rusqlite | `.mio` v3 项目数据库、事务与关系索引 | rusqlite 0.40.2（MIT），libsqlite3-sys 0.38.2（MIT），内置 SQLite 3.53.2（公有领域）；[SQLite 来源](https://sqlite.org/)、[Rust 绑定](https://github.com/rusqlite/rusqlite)，未修改上游源码，锁定版本见 Cargo.lock |
 | Wry / gtk-rs / x11-dl | 同窗口 React 文字输入的原生 WebView 与 Linux GTK/X11 事件适配 | Wry 0.57.0（MIT OR Apache-2.0）、gtk 0.18.2（MIT）、x11-dl 2.21.0（MIT）；实现参考 Wry 的 wgpu 子窗口示例，依赖版本见 Cargo.lock |
 | Kayak UI / kayak_font_msdf | MSDF 字形生成器的上游实现与本地适配 | [原作者、来源及本地修改](vendor/kayak_font_msdf/UPSTREAM.md) |
 | Viktor Chlumský 的 msdfgen | MSDF 算法来源及修复参考 | [MSDF 来源说明](vendor/kayak_font_msdf/UPSTREAM.md) |

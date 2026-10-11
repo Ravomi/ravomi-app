@@ -22,7 +22,7 @@ bash packaging/linux/install-app.sh
 
 为 `.mio` 和 `.prg` 文件生成离线 PNG 预览，复用并维护 Godot 版的 Python/Cairo/Pango 工具。不启动 Bevy/Godot，不执行文档代码，不修改源文件；这不是画布内的节点或分组缩略图。
 
-支持 Ravomi `.mio` 的 ZIP `manifest.json`、`canvas/stage.msgpack` 和 `assets/`；校验项目格式版本及必需能力，不读取或执行协作历史。Linux MIME 新增 `application/x-ravomi`，保留 `.prg` 的 `application/vnd.project-graph` 及别名。
+支持 Ravomi `.mio` SQLite v3 的画布记录和附件，并兼容 ZIP v1/v2 的 `manifest.json`、`canvas/stage.msgpack` 和 `assets/`；校验版本与必需能力，SQLite 内容校验 SHA-256，在只读事务中生成预览，不读取或执行协作历史。Linux MIME 为 `application/x-ravomi`，保留 `.prg` 的 `application/vnd.project-graph` 及别名。
 
 兼容预览 Bevy/master 的 ZIP `stage.msgpack`、Godot 的 ZIP `stage.json`、原生 `PGDOC4` JSON 预览块，以及仅含 `thumbnail.png` 的旧文件。PGDOC4 会校验块范围及 SHA-256，不解码 Godot Variant 记录。缩略图支持范围不等同于编辑器支持导入的格式；编辑器当前只支持 `.mio` 与 ZIP + MessagePack `.prg`。
 
@@ -84,7 +84,7 @@ MIME 正式名称沿用 Tauri 的 `application/vnd.project-graph`，旧名 `appl
 
 这是文档概览，仍使用 Godot 版的节点样式与容器排版。ArcEdge、自环、同端点平行连线使用简化曲线；MultiTarget 的 convex/circle 暂按中心连线预览，不保留包围轮廓。未保存的编辑不会出现在预览里。
 
-输入限制：ZIP 256 MiB、10000 条目、stage/单个预览块 16 MiB、5000 对象、引用树深度 100。CLI 有 15 秒处理预算；失败返回非零状态及简短错误。图片解码使用系统库，不访问文档中的远程资源。
+输入限制：ZIP 256 MiB、10000 条目、stage/单个预览块 16 MiB、5000 对象、引用树深度 100；SQLite 文件 1 GiB、5000 画布记录、单内容 16 MiB、累计读取正文 64 MiB。CLI 有 15 秒处理预算；失败返回非零状态及简短错误。图片解码使用系统库，不访问文档中的远程资源。
 
 ## 验证
 

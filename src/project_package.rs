@@ -82,7 +82,7 @@ fn checksum(reader: impl Read, declared_size: u64) -> Result<ObjectRef> {
 
 fn validate_manifest(manifest: &Manifest) -> Result<()> {
     manifest.validate()?;
-    if manifest.schema_version != project::SCHEMA_VERSION {
+    if manifest.schema_version != project::ZIP_SCHEMA_VERSION {
         return Err("内容寻址项目包需要当前容器版本".into());
     }
     Ok(())
@@ -352,7 +352,8 @@ mod tests {
         document
             .attachments
             .insert(BINDINGS_ATTACHMENT.into(), BINDING_BYTES.to_vec());
-        document.save(&path).unwrap();
+        // Keep exercising the legacy v2 reader after native saves switch to SQLite.
+        document.write_archive(&path, true, false).unwrap();
         Fixture {
             directory,
             path,
