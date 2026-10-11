@@ -198,9 +198,14 @@ fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_version
     assert!(bindings.capture(&doc, &HashSet::from([index])).is_err());
     let refs = bindings.selected_runs(&doc, &HashSet::from([index]), &snapshot);
     assert_eq!(refs[0].run_id, snapshot.workflows[0].runs[0].id);
-    let file = directory.path().join("agents.prg");
+    let file = directory.path().join("agents.mio");
     doc.save(&file).unwrap();
+    let saved_revision = doc.revision;
+    bindings.sync(&mut doc, &snapshot).unwrap();
+    assert!(!doc.dirty());
+    assert_eq!(doc.revision, saved_revision);
     let restored = Document::open(&file).unwrap();
+    assert_eq!(restored.history_archive(), doc.history_archive());
     if let Some(path) = std::env::var_os("RAVOMI_CANVAS_AI_FIXTURE") {
         doc.save(Path::new(&path)).unwrap();
         fs::copy(

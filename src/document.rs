@@ -214,6 +214,7 @@ pub struct Document {
     pending: Option<(String, Vec<GraphNode>)>,
     archive: Option<Vec<u8>>,
     manifest: Manifest,
+    instance_token: uuid::Uuid,
     archived_history: History,
     project_dirty: bool,
     original: Vec<GraphNode>,
@@ -325,6 +326,7 @@ impl Document {
             path: None,
             archive: None,
             manifest: Manifest::default(),
+            instance_token: uuid::Uuid::new_v4(),
             archived_history: History::default(),
             project_dirty: false,
             disk_bytes: None,
@@ -389,6 +391,16 @@ impl Document {
         &self.manifest.project_id
     }
 
+    /// Local ownership only: opening a copy never reconnects an active runtime.
+    pub fn instance_token(&self) -> uuid::Uuid {
+        self.instance_token
+    }
+
+    pub fn mark_project_changed(&mut self) {
+        self.project_dirty = true;
+        self.revision += 1;
+    }
+
     pub fn history_archive(&self) -> &History {
         &self.archived_history
     }
@@ -438,9 +450,11 @@ impl Document {
             }
         }
         next.validate()?;
+        if next == self.archived_history {
+            return Ok(());
+        }
         self.archived_history = next;
-        self.project_dirty = true;
-        self.revision += 1;
+        self.mark_project_changed();
         Ok(())
     }
 

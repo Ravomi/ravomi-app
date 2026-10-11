@@ -703,7 +703,13 @@ impl Editor {
         }
         true
     }
-    fn save(&mut self, doc: &mut Document, physics: &mut physics::PhysicsEditor, copy: bool) {
+    fn save(
+        &mut self,
+        doc: &mut Document,
+        physics: &mut physics::PhysicsEditor,
+        copy: bool,
+        ai: Option<&mut canvas_ai::State>,
+    ) {
         if self.active.as_ref().is_some_and(|e| e.composing) {
             return;
         }
@@ -712,6 +718,12 @@ impl Editor {
             return;
         }
         doc.finish();
+        if let Some(ai) = ai
+            && let Err(error) = ai.prepare_save(doc)
+        {
+            self.report_error(error);
+            return;
+        }
         if copy || doc.path.is_none() {
             if self.dialog.is_none() {
                 let (tx, rx) = mpsc::channel();
@@ -801,6 +813,7 @@ pub fn ui(
     mut physics: ResMut<physics::PhysicsEditor>,
     mut effects: ResMut<effects::Effects>,
     mut tabs: ResMut<tabs::Tabs>,
+    mut ai: Option<ResMut<canvas_ai::State>>,
     mut assets: ResMut<NodeAssets>,
     mut images: ResMut<Assets<Image>>,
 ) -> bevy::prelude::Result {
@@ -937,8 +950,15 @@ pub fn ui(
                             tabs.close_after_save = false;
                         }
                         Ok(path) => {
-                            if let Err(error) = scene.0.save(&path) {
-                                editor.report_error(error.to_string());
+                            let result = ai
+                                .as_deref_mut()
+                                .map(|ai| ai.prepare_save(&mut scene.0))
+                                .transpose()
+                                .and_then(|_| {
+                                    scene.0.save(&path).map_err(|error| error.to_string())
+                                });
+                            if let Err(error) = result {
+                                editor.report_error(error);
                                 tabs.close_after_save = false;
                             }
                         }
@@ -1575,7 +1595,7 @@ pub fn ui(
         save = true;
     }
     if save || save_copy {
-        editor.save(&mut scene.0, &mut physics, save_copy);
+        editor.save(&mut scene.0, &mut physics, save_copy, ai.as_deref_mut());
         interaction.moving.clear();
         interaction.drag_start = None;
         interaction.selecting = false;
@@ -1659,7 +1679,7 @@ pub fn ui(
                 });
             });
         if save_current {
-            editor.save(&mut scene.0, &mut physics, false);
+            editor.save(&mut scene.0, &mut physics, false, ai.as_deref_mut());
             if !quitting {
                 tabs.close_after_save = editor.error.is_none();
             }

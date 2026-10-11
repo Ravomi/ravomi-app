@@ -52,7 +52,12 @@ struct Backups {
     pending: Option<Mutex<mpsc::Receiver<BackupResult>>>,
 }
 
-pub fn backup(mut tabs: ResMut<Tabs>, scene: Res<Scene>, mut editor: ResMut<editor::Editor>) {
+pub fn backup(
+    mut tabs: ResMut<Tabs>,
+    mut scene: ResMut<Scene>,
+    mut editor: ResMut<editor::Editor>,
+    mut ai: Option<ResMut<canvas_ai::State>>,
+) {
     if !tabs.backups.loaded {
         tabs.backups.loaded = true;
         match tabs
@@ -97,22 +102,40 @@ pub fn backup(mut tabs: ResMut<Tabs>, scene: Res<Scene>, mut editor: ResMut<edit
     }
     tabs.backups.last_attempt = Some(now);
     tabs.ensure(&scene.0);
+    let snapshot = match ai
+        .as_deref_mut()
+        .map(canvas_ai::State::snapshot_for_save)
+        .transpose()
+    {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            editor.report_error(format!("无法准备协作恢复副本：{error}"));
+            return;
+        }
+    };
     let mut captures = Vec::new();
-    for (index, tab) in tabs.entries.iter().enumerate() {
+    let tabs = &mut *tabs;
+    for (index, tab) in tabs.entries.iter_mut().enumerate() {
         let document = if index == tabs.active {
             if editor.active.is_some() {
                 continue;
             }
-            &scene.0
-        } else if let Some(document) = &tab.document {
+            &mut scene.0
+        } else if let Some(document) = &mut tab.document {
             document
         } else {
             continue;
         };
-        if !document.dirty()
-            || document.in_transaction()
-            || tabs.backups.completed.get(&tab.id) == Some(&document.revision)
+        if document.in_transaction() {
+            continue;
+        }
+        if let (Some(ai), Some(snapshot)) = (ai.as_deref(), snapshot.as_ref())
+            && let Err(error) = ai.prepare_document(document, snapshot)
         {
+            editor.report_error(format!("无法准备协作恢复副本：{error}"));
+            return;
+        }
+        if !document.dirty() || tabs.backups.completed.get(&tab.id) == Some(&document.revision) {
             continue;
         }
         match document.capture_snapshot() {
@@ -260,8 +283,46 @@ fn title(doc: &Document) -> String {
 }
 
 impl Tabs {
-    pub(super) fn active_id(&self) -> u64 {
-        self.entries.get(self.active).map_or(0, |tab| tab.id)
+    pub(super) fn document_mut<'a>(
+        &'a mut self,
+        active: &'a mut Document,
+        token: uuid::Uuid,
+    ) -> Option<&'a mut Document> {
+        if active.instance_token() == token {
+            Some(active)
+        } else {
+            self.entries
+                .iter_mut()
+                .filter_map(|tab| tab.document.as_mut())
+                .find(|document| document.instance_token() == token)
+        }
+    }
+
+    pub(super) fn instance_tokens(&self, active: &Document) -> HashSet<uuid::Uuid> {
+        std::iter::once(active.instance_token())
+            .chain(
+                self.entries
+                    .iter()
+                    .filter_map(|tab| tab.document.as_ref())
+                    .map(Document::instance_token),
+            )
+            .collect()
+    }
+
+    pub(super) fn for_each_document_mut(
+        &mut self,
+        active: &mut Document,
+        mut update: impl FnMut(&mut Document) -> std::result::Result<(), String>,
+    ) -> std::result::Result<(), String> {
+        update(active)?;
+        for document in self
+            .entries
+            .iter_mut()
+            .filter_map(|tab| tab.document.as_mut())
+        {
+            update(document)?;
+        }
+        Ok(())
     }
 
     fn backup_directory(&self) -> Result<PathBuf> {

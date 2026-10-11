@@ -1,4 +1,4 @@
-//! Canvas bindings travel with the document; execution records remain in the local runtime.
+//! Canvas bindings and selected evidence travel with the document; execution stays local.
 use super::*;
 use crate::document::Document;
 use std::collections::HashSet;
@@ -42,7 +42,7 @@ impl Bindings {
         let bytes = serde_json::to_vec(self).map_err(|e| e.to_string())?;
         if doc.attachments.get(ATTACHMENT) != Some(&bytes) {
             doc.attachments.insert(ATTACHMENT.into(), bytes);
-            doc.revision += 1;
+            doc.mark_project_changed();
         }
         Ok(())
     }
@@ -141,6 +141,45 @@ impl Bindings {
         if doc.in_transaction() {
             return Ok(());
         }
+        let creates_nodes = self.workflows.iter().any(|binding| {
+            snapshot
+                .workflows
+                .iter()
+                .find(|workflow| workflow.id == binding.workflow_id)
+                .is_some_and(|workflow| {
+                    tasks(workflow)
+                        .iter()
+                        .any(|(id, _, _)| !binding.agents.iter().any(|agent| &agent.task_id == id))
+                })
+        });
+        if creates_nodes {
+            // Creation can fail on locked groups or invalid geometry. Validate the
+            // entire projection on a detached copy before changing saved evidence.
+            let mut staged = doc.capture_snapshot().map_err(|error| error.to_string())?;
+            self.clone().sync_inner(&mut staged, snapshot)?;
+        }
+        self.sync_inner(doc, snapshot)
+    }
+
+    fn sync_inner(&mut self, doc: &mut Document, snapshot: &Snapshot) -> Result<()> {
+        // The caller supplies only workflows explicitly connected to this document
+        // instance. Missing local workflows never remove previously saved evidence.
+        let ids: Vec<_> = self
+            .workflows
+            .iter()
+            .filter(|binding| {
+                snapshot
+                    .workflows
+                    .iter()
+                    .any(|workflow| workflow.id == binding.workflow_id)
+            })
+            .map(|binding| binding.workflow_id.clone())
+            .collect();
+        let history = crate::project_history::History::capture(snapshot, &ids)
+            .map_err(|error| error.to_string())?;
+        doc.attach_history(history)
+            .map_err(|error| error.to_string())?;
+        let mut changed_text = false;
         for binding in &mut self.workflows {
             let Some(w) = snapshot
                 .workflows
@@ -149,17 +188,7 @@ impl Bindings {
             else {
                 continue;
             };
-            let mut tasks = vec![("$plan".to_string(), "任务规划".to_string(), None)];
-            if w.runs.iter().any(|r| r.task_id == "$skill") {
-                tasks = vec![("$skill".into(), format!("Skill · {}", w.goal), None)];
-            } else if let Some(p) = w.plan.as_ref().or(w.draft_plan.as_ref()) {
-                tasks.extend(
-                    p.tasks
-                        .iter()
-                        .map(|t| (t.id.clone(), t.title.clone(), t.parent_agent.clone())),
-                );
-            }
-            for (task_id, title, parent) in tasks {
+            for (task_id, title, parent) in tasks(w) {
                 if !binding.agents.iter().any(|a| a.task_id == task_id) {
                     let column = layer(w, &task_id, MAX_TASKS);
                     let row = binding
@@ -261,13 +290,33 @@ impl Bindings {
                         && node.text != text
                     {
                         node.text = text;
-                        doc.revision += 1;
+                        changed_text = true;
                     }
                 }
             }
         }
+        if changed_text {
+            doc.mark_project_changed();
+        }
         self.write(doc)
     }
+}
+
+fn tasks(workflow: &Workflow) -> Vec<(String, String, Option<String>)> {
+    if workflow.runs.iter().any(|run| run.task_id == "$skill") {
+        return vec![("$skill".into(), format!("Skill · {}", workflow.goal), None)];
+    }
+    let mut tasks = vec![("$plan".into(), "任务规划".into(), None)];
+    if let Some(plan) = workflow.plan.as_ref().or(workflow.draft_plan.as_ref()) {
+        tasks.extend(plan.tasks.iter().map(|task| {
+            (
+                task.id.clone(),
+                task.title.clone(),
+                task.parent_agent.clone(),
+            )
+        }));
+    }
+    tasks
 }
 
 fn layer(workflow: &Workflow, task_id: &str, remaining: usize) -> usize {
