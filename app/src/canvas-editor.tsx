@@ -58,7 +58,7 @@ function CanvasEditor() {
     post({ type: 'commit', session: state.session, text, ...dimensions(text) });
   }
   if (!state) return null;
-  return <div data-theme={state.light ? 'light' : 'dark'} style={{ background: state.background ?? (state.light ? '#e6e9ef' : '#313244'), height: '100%' }}>
+  return <div data-theme={state.light ? 'light' : 'dark'} style={{ background: state.background ?? (state.light ? '#ffffff' : '#292a31'), height: '100%' }}>
     <div ref={measure} className="measure" aria-hidden="true" style={{ fontSize: state.fontSize, width: state.autoSize ? 'max-content' : state.contentWidth, whiteSpace: state.autoSize ? 'pre' : 'pre-wrap' }} />
     <textarea ref={input} aria-label="节点文字" value={draft} spellCheck={false}
       title="Enter 完成 · Shift+Enter 换行 · Esc 结束编辑"

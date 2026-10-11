@@ -39,6 +39,7 @@ pub struct Home {
     was_visible: bool,
     deletion: Option<DeleteRequest>,
     location: Option<Mutex<mpsc::Receiver<Result<(), String>>>>,
+    avatar: Option<egui::TextureHandle>,
 }
 
 fn recent_path() -> Option<PathBuf> {
@@ -236,6 +237,24 @@ impl Home {
         if !self.visible {
             return None;
         }
+        if self.avatar.is_none() {
+            match image::load_from_memory(include_bytes!(
+                "../assets/branding/app-icons/256x256.png"
+            )) {
+                Ok(image) => {
+                    let image = image.to_rgba8();
+                    self.avatar = Some(ctx.load_texture(
+                        "ravomi-avatar",
+                        egui::ColorImage::from_rgba_unmultiplied(
+                            [image.width() as usize, image.height() as usize],
+                            image.as_raw(),
+                        ),
+                        egui::TextureOptions::LINEAR,
+                    ));
+                }
+                Err(error) => return Some(Action::Error(format!("品牌图像加载失败：{error}"))),
+            }
+        }
         let colors = theme::chrome_palette(light);
         let accent = colors.active;
         let screen = ctx.content_rect();
@@ -270,108 +289,111 @@ impl Home {
                         .max_rect(sidebar)
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
-                theme::chrome_style(&mut nav, light);
-                nav.spacing_mut().interact_size.y = 32.0;
-                nav.spacing_mut().item_spacing = egui::vec2(10.0, 6.0);
-                nav.spacing_mut().button_padding = egui::vec2(14.0, 6.0);
-                let visuals = nav.visuals_mut();
-                visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
-                visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-                visuals.widgets.hovered.weak_bg_fill = accent.gamma_multiply(0.08);
-                visuals.widgets.active.weak_bg_fill = accent.gamma_multiply(0.14);
-                visuals.selection.bg_fill = accent.gamma_multiply(0.14);
-                visuals.selection.stroke = egui::Stroke::NONE;
-                nav.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("Ravomi")
-                            .size(17.0)
-                            .color(colors.foreground),
-                    );
-                });
-                nav.label(
-                    egui::RichText::new("人和 Agent，共绘工作")
-                        .size(12.0)
-                        .color(colors.muted),
-                );
-                nav.add_space(18.0);
-                let width = sidebar.width();
-                if nav
-                    .add_sized(
-                        [width, 32.0],
-                        nav_button(
-                            &self.icons,
-                            18,
-                            "新建草稿",
-                            if light {
-                                egui::Color32::WHITE
-                            } else {
-                                colors.ink
-                            },
-                            13.0,
-                        )
-                        .frame(true)
-                        .fill(accent)
-                        .corner_radius(12),
-                    )
-                    .clicked()
-                {
-                    action = Some(Action::New);
-                }
-                if nav
-                    .add_sized(
-                        [width, 32.0],
-                        nav_button(&self.icons, 16, "打开文件…", colors.foreground, 13.0),
-                    )
-                    .clicked()
-                {
-                    action = Some(Action::Open);
-                }
-                nav.add_sized(
-                    [width, 32.0],
-                    nav_button(&self.icons, 17, "最近打开", colors.foreground, 13.0)
-                        .frame(true)
-                        .selected(true)
-                        .corner_radius(12),
-                );
-                if nav
-                    .add_sized(
-                        [width, 32.0],
-                        nav_button(&self.icons, 21, "使用指南", colors.foreground, 13.0),
-                    )
-                    .clicked()
-                {
-                    action = Some(Action::Help);
-                }
-                nav.add_space((sidebar.bottom() - nav.cursor().top() - 108.0).max(12.0));
-                if nav
-                    .add_sized(
-                        [width, 32.0],
-                        nav_button(&self.icons, 9, "设置", colors.foreground, 12.0),
-                    )
-                    .clicked()
-                {
-                    action = Some(Action::Settings);
-                }
-                if nav
-                    .add_sized(
-                        [width, 32.0],
-                        nav_button(&self.icons, 25, "关于", colors.foreground, 12.0),
-                    )
-                    .clicked()
-                {
-                    action = Some(Action::About);
-                }
-                if nav
-                    .add_sized(
-                        [width, 32.0],
-                        nav_button(&self.icons, 26, "项目仓库", colors.foreground, 12.0),
-                    )
-                    .clicked()
-                {
-                    ctx.open_url(egui::OpenUrl::new_tab(
-                        "https://github.com/Wang-Yang-source/H-M",
-                    ));
-                }
+                egui::ScrollArea::vertical()
+                    .id_salt("home-navigation")
+                    .max_height(sidebar.height())
+                    .auto_shrink([false, false])
+                    .show(&mut nav, |nav| {
+                        theme::chrome_style(nav, light);
+                        nav.spacing_mut().interact_size.y = 32.0;
+                        nav.spacing_mut().item_spacing = egui::vec2(10.0, 6.0);
+                        nav.spacing_mut().button_padding = egui::vec2(14.0, 6.0);
+                        let visuals = nav.visuals_mut();
+                        visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                        visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                        visuals.widgets.hovered.weak_bg_fill = accent.gamma_multiply(0.08);
+                        visuals.widgets.active.weak_bg_fill = accent.gamma_multiply(0.14);
+                        visuals.selection.bg_fill = accent.gamma_multiply(0.14);
+                        visuals.selection.stroke = egui::Stroke::NONE;
+                        nav.horizontal(|ui| {
+                            if let Some(avatar) = &self.avatar {
+                                ui.add(
+                                    egui::Image::new((avatar.id(), egui::vec2(32.0, 32.0)))
+                                        .corner_radius(10),
+                                );
+                            }
+                            ui.label(
+                                egui::RichText::new("Ravomi")
+                                    .size(22.0)
+                                    .strong()
+                                    .color(colors.foreground),
+                            );
+                        });
+                        nav.label(
+                            egui::RichText::new("人和 Agent，共绘工作")
+                                .size(12.0)
+                                .color(colors.muted),
+                        );
+                        nav.add_space(18.0);
+                        let width = nav.available_width();
+                        if nav
+                            .add_sized(
+                                [width, 32.0],
+                                nav_button(&self.icons, 18, "新建草稿", colors.on_primary, 13.0)
+                                    .frame(true)
+                                    .fill(colors.primary)
+                                    .corner_radius(18),
+                            )
+                            .clicked()
+                        {
+                            action = Some(Action::New);
+                        }
+                        if nav
+                            .add_sized(
+                                [width, 32.0],
+                                nav_button(&self.icons, 16, "打开文件…", colors.foreground, 13.0),
+                            )
+                            .clicked()
+                        {
+                            action = Some(Action::Open);
+                        }
+                        nav.add_sized(
+                            [width, 32.0],
+                            nav_button(&self.icons, 17, "最近打开", colors.foreground, 13.0)
+                                .frame(true)
+                                .selected(true)
+                                .corner_radius(12),
+                        );
+                        if nav
+                            .add_sized(
+                                [width, 32.0],
+                                nav_button(&self.icons, 21, "使用指南", colors.foreground, 13.0),
+                            )
+                            .clicked()
+                        {
+                            action = Some(Action::Help);
+                        }
+                        nav.add_space((sidebar.bottom() - nav.cursor().top() - 108.0).max(12.0));
+                        if nav
+                            .add_sized(
+                                [width, 32.0],
+                                nav_button(&self.icons, 9, "设置", colors.foreground, 12.0),
+                            )
+                            .clicked()
+                        {
+                            action = Some(Action::Settings);
+                        }
+                        if nav
+                            .add_sized(
+                                [width, 32.0],
+                                nav_button(&self.icons, 25, "关于", colors.foreground, 12.0),
+                            )
+                            .clicked()
+                        {
+                            action = Some(Action::About);
+                        }
+                        if nav
+                            .add_sized(
+                                [width, 32.0],
+                                nav_button(&self.icons, 26, "项目仓库", colors.foreground, 12.0),
+                            )
+                            .clicked()
+                        {
+                            ctx.open_url(egui::OpenUrl::new_tab(
+                                "https://github.com/Ravomi/ravomi-app",
+                            ));
+                        }
+                    });
 
                 let content = egui::Rect::from_min_max(
                     egui::pos2(sidebar.right() + 20.0, rect.top() + 26.0),
@@ -383,11 +405,52 @@ impl Home {
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
                 theme::chrome_style(&mut body, light);
+                if content.width() >= 460.0 && content.height() >= 480.0 {
+                    egui::Frame::new()
+                        .fill(egui::Color32::from_rgb(22, 23, 28))
+                        .corner_radius(24)
+                        .inner_margin(24)
+                        .show(&mut body, |ui| {
+                            ui.set_width((content.width() - 48.0).max(0.0));
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("RAVOMI / YOUR WORKSPACE")
+                                            .size(11.0)
+                                            .color(egui::Color32::from_rgb(195, 194, 206)),
+                                    );
+                                    ui.add_space(10.0);
+                                    ui.label(
+                                        egui::RichText::new("让灵感安静生长")
+                                            .size(28.0)
+                                            .strong()
+                                            .color(egui::Color32::from_rgb(248, 247, 244)),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new("记录、连接，逐步展开你的工作。")
+                                            .color(egui::Color32::from_rgb(195, 194, 206)),
+                                    );
+                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if let Some(avatar) = &self.avatar {
+                                            ui.add(
+                                                egui::Image::new((
+                                                    avatar.id(),
+                                                    egui::vec2(104.0, 104.0),
+                                                ))
+                                                .corner_radius(24),
+                                            );
+                                        }
+                                    },
+                                );
+                            });
+                        });
+                    body.add_space(24.0);
+                }
                 body.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("今天，想连接些什么？")
-                            .size(if content.width() < 600.0 { 22.0 } else { 30.0 }),
-                    );
+                    ui.label(egui::RichText::new("我的画布").size(22.0));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if theme::close_button(ui, light, "返回画布").clicked() {
                             self.visible = false;
@@ -420,7 +483,7 @@ impl Home {
                 let columns = ((content.width() + 16.0) / 240.0).floor().clamp(1.0, 4.0) as usize;
                 let card_width = (content.width() - (columns - 1) as f32 * 16.0) / columns as f32;
                 egui::ScrollArea::vertical()
-                    .max_height((content.height() - 140.0).max(100.0))
+                    .max_height((content.bottom() - body.cursor().top()).max(80.0))
                     .show(&mut body, |ui| {
                         let matches: Vec<_> = self
                             .recent

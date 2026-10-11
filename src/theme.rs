@@ -12,32 +12,26 @@ pub struct Palette {
 }
 
 pub fn window_background(light: bool) -> Color {
-    let mut color = palette(light).canvas.to_linear();
-    color.alpha = 0.82;
-    // Window surfaces use premultiplied alpha, including the clear color.
-    color.red *= color.alpha;
-    color.green *= color.alpha;
-    color.blue *= color.alpha;
-    color.into()
+    palette(light).canvas
 }
 
 pub fn palette(light: bool) -> Palette {
     let rgb = |n: u32| Color::srgb_u8((n >> 16) as u8, (n >> 8) as u8, n as u8);
     if light {
         Palette {
-            canvas: rgb(0xeff1f5),
-            surface: rgb(0xe6e9ef),
-            border: rgb(0xacb0be),
-            text: rgb(0x4c4f69),
-            accent: rgb(0x8839ef),
+            canvas: rgb(0xf8f7f4),
+            surface: rgb(0xffffff),
+            border: rgb(0x797983),
+            text: rgb(0x24252a),
+            accent: rgb(0x595e82),
         }
     } else {
         Palette {
-            canvas: rgb(0x1e1e2e),
-            surface: rgb(0x313244),
-            border: rgb(0x585b70),
-            text: rgb(0xcdd6f4),
-            accent: rgb(0xcba6f7),
+            canvas: rgb(0x1c1d22),
+            surface: rgb(0x292a31),
+            border: rgb(0x8f909e),
+            text: rgb(0xf0eff4),
+            accent: rgb(0xadb8d9),
         }
     }
 }
@@ -125,6 +119,8 @@ pub struct DockPalette {
     pub foreground: egui::Color32,
     pub active: egui::Color32,
     pub ink: egui::Color32,
+    pub primary: egui::Color32,
+    pub on_primary: egui::Color32,
 }
 
 pub fn dock_palette(light: bool) -> DockPalette {
@@ -166,11 +162,7 @@ pub fn dock_style(ui: &mut egui::Ui, light: bool) {
 
 pub fn chrome_frame(light: bool) -> egui::Frame {
     dock_frame(light)
-        .fill(if light {
-            egui::Color32::from_rgb(230, 233, 239)
-        } else {
-            egui::Color32::from_rgb(24, 24, 37)
-        })
+        .fill(chrome_palette(light).surface)
         .stroke(egui::Stroke::new(1.0, egui::Color32::TRANSPARENT))
 }
 
@@ -178,21 +170,25 @@ pub fn chrome_palette(light: bool) -> DockPalette {
     let rgb = |n: u32| egui::Color32::from_rgb((n >> 16) as u8, (n >> 8) as u8, n as u8);
     if light {
         DockPalette {
-            surface: rgb(0xe6e9ef),
-            border: rgb(0xccd0da),
-            muted: rgb(0x626579),
-            foreground: rgb(0x4c4f69),
-            active: rgb(0x8839ef),
-            ink: rgb(0xeff1f5),
+            surface: rgb(0xeeedf1),
+            border: rgb(0xd6d5dc),
+            muted: rgb(0x63636d),
+            foreground: rgb(0x24252a),
+            active: rgb(0x595e82),
+            ink: rgb(0xffffff),
+            primary: rgb(0x16171c),
+            on_primary: rgb(0xffffff),
         }
     } else {
         DockPalette {
-            surface: rgb(0x181825),
-            border: rgb(0x313244),
-            muted: rgb(0xa6adc8),
-            foreground: rgb(0xcdd6f4),
-            active: rgb(0xcba6f7),
-            ink: rgb(0x1e1e2e),
+            surface: rgb(0x24242b),
+            border: rgb(0x494a55),
+            muted: rgb(0xb7b6c2),
+            foreground: rgb(0xf0eff4),
+            active: rgb(0xadb8d9),
+            ink: rgb(0x202126),
+            primary: rgb(0xf5f4ee),
+            on_primary: rgb(0x202126),
         }
     }
 }
@@ -210,7 +206,7 @@ pub fn tool_frame(light: bool) -> egui::Frame {
     egui::Frame::new()
         .fill(egui_color(palette(light).canvas))
         .stroke(egui::Stroke::new(1.0, p.border))
-        .corner_radius(12)
+        .corner_radius(16)
         .inner_margin(16)
         .shadow(egui::epaint::Shadow {
             offset: [0, 4],
@@ -285,11 +281,11 @@ pub fn tool_header(ui: &mut egui::Ui, title: &str, light: bool) -> bool {
 
 pub fn primary_button<'a>(label: &'a str, light: bool) -> egui::Button<'a> {
     let p = chrome_palette(light);
-    egui::Button::new(egui::RichText::new(label).color(p.ink))
-        .fill(p.active)
+    egui::Button::new(egui::RichText::new(label).color(p.on_primary))
+        .fill(p.primary)
         .stroke(egui::Stroke::NONE)
-        .corner_radius(8)
-        .min_size(egui::vec2(80.0, 32.0))
+        .corner_radius(18)
+        .min_size(egui::vec2(80.0, 36.0))
 }
 pub fn apply(ctx: &egui::Context, light: bool) {
     let egui_theme = if light {
@@ -330,7 +326,7 @@ pub fn apply(ctx: &egui::Context, light: bool) {
     visuals.selection.stroke = egui::Stroke::new(1.0, egui_color(p.accent));
     visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, egui_color(p.accent));
     visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui_color(p.accent));
-    visuals.window_corner_radius = egui::CornerRadius::same(12);
+    visuals.window_corner_radius = egui::CornerRadius::same(16);
     ctx.set_visuals(visuals);
     ctx.style_mut_of(egui_theme, |style| {
         style.spacing.item_spacing = egui::vec2(8.0, 8.0);
@@ -698,6 +694,7 @@ mod tests {
                 (chrome.foreground, egui_color(p.surface)),
                 (chrome.muted, egui_color(p.surface)),
                 (chrome.ink, chrome.active),
+                (chrome.on_primary, chrome.primary),
             ] {
                 let a = luminance(foreground);
                 let b = luminance(background);
