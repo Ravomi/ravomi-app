@@ -2322,6 +2322,7 @@ fn section_value(node: &GraphNode) -> Value {
         ("_".into(), "Section".into()),
         ("uuid".into(), node.id.clone().into()),
         ("text".into(), node.text.clone().into()),
+        ("fontSize".into(), Value::F64(node.font_size as f64)),
         ("children".into(), Value::Array(vec![])),
         ("locked".into(), node.locked.into()),
         ("isCollapsed".into(), node.collapsed.into()),
@@ -2845,6 +2846,28 @@ fn transform_shapes(value: &mut Value, old: [f32; 4], new: [f32; 4]) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_group_font_size_survives_saving() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut document = Document::blank().unwrap();
+        let text = document.create_text_node([0.0, 0.0]).unwrap();
+        let group = document.create_group(&HashSet::from([text])).unwrap();
+        document.nodes[group].font_size = 22.0;
+        let id = document.nodes[group].id.clone();
+        let path = directory.path().join("group.prg");
+        document.save(&path).unwrap();
+        let restored = Document::open(&path).unwrap();
+        assert_eq!(
+            restored
+                .nodes
+                .iter()
+                .find(|node| node.id == id)
+                .unwrap()
+                .font_size,
+            22.0
+        );
+    }
 
     #[test]
     fn arc_edge_style_and_shape_survive_copy_save_and_reopen() {
