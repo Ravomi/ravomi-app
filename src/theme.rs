@@ -293,11 +293,15 @@ pub fn tool_header(ui: &mut egui::Ui, title: &str, light: bool) -> bool {
 
 pub fn primary_button<'a>(label: &'a str, light: bool) -> egui::Button<'a> {
     let p = chrome_palette(light);
-    egui::Button::new(egui::RichText::new(label).color(p.on_primary))
-        .fill(p.primary)
-        .stroke(egui::Stroke::NONE)
-        .corner_radius(18)
-        .min_size(egui::vec2(80.0, 36.0))
+    egui::Button::new((
+        egui::Atom::grow(),
+        egui::RichText::new(label).color(p.on_primary),
+        egui::Atom::grow(),
+    ))
+    .fill(p.primary)
+    .stroke(egui::Stroke::NONE)
+    .corner_radius(18)
+    .min_size(egui::vec2(80.0, 36.0))
 }
 pub fn apply(ctx: &egui::Context, light: bool) {
     let egui_theme = if light {

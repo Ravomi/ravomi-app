@@ -461,10 +461,13 @@ pub fn ui(
     let mut new_skill = false;
     let mut connect = false;
     let mut open = state.open || submit_key;
+    let mut close = false;
     if open {
-        egui::Window::new("画布协作").frame(theme::tool_frame(editor.light)).open(&mut open).default_width(430.0).default_pos([700.0, 135.0]).show(ctx, |ui| {
+        egui::Window::new("画布协作").title_bar(false).frame(theme::tool_frame(editor.light)).open(&mut open).default_width(430.0).min_width(120.0).max_width((ctx.content_rect().width() - 64.0).max(120.0)).default_pos([700.0, 135.0]).show(ctx, |ui| {
             theme::tool_style(ui, editor.light);
-            egui::ScrollArea::vertical().max_height(650.0).show(ui, |ui| {
+            ui.spacing_mut().scroll.fade.strength = 0.0;
+            close = theme::tool_header(ui, "画布协作", editor.light);
+            egui::ScrollArea::vertical().max_height((ctx.content_rect().height() - 140.0).clamp(80.0, 650.0)).show(ui, |ui| {
                 ui.label("选区是输入；Space 开始任务。就绪的 Agent 可并行运行。");
                 if bindings.workflows.iter().any(|b| state.owners.get(&b.workflow_id) != Some(&token)) {
                     ui.label("项目内历史保持为归档；连接本机流程后才接收更新与控制运行。");
@@ -597,7 +600,7 @@ pub fn ui(
             });
         });
     }
-    state.open = open;
+    state.open = open && !close;
     if connect {
         match state.connect(&mut scene.0) {
             Ok(count) => state.notice = format!("已连接 {count} 个本机流程；其他归档保持不变"),

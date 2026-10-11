@@ -536,7 +536,9 @@ fn about_content(ui: &mut egui::Ui, light: bool) {
     ui.colored_label(palette.muted, "Ravomi · 无限画布");
     ui.heading("人和 Agent，共绘工作。");
     ui.add(egui::Label::new("以无限画布为工作空间的多 Agent 协作平台。将代码、素材、任务与子代理组织为可连接的模块，让工作过程可见、任务关系清晰、执行过程可控。").wrap());
-    ui.add(egui::Label::new("当前为画布编辑原型；Agent 编排与执行仍在开发规划中。").wrap());
+    ui.add(
+        egui::Label::new("已接入 Pi 文字与代码协作；动态自主委派与图像工作流仍在规划中。").wrap(),
+    );
     let card = |ui: &mut egui::Ui, community: bool| {
         egui::Frame::new()
             .stroke(egui::Stroke::new(1.0, palette.border))
@@ -1428,10 +1430,15 @@ pub fn ui(
         }
         if edit.edge {
             egui::Window::new("连线标题")
+                .frame(theme::tool_frame(light))
                 .collapsible(false)
                 .resizable(true)
                 .default_width(300.0)
+                .max_width((ctx.content_rect().width() - 64.0).max(120.0))
+                .max_height((ctx.content_rect().height() - 100.0).max(80.0))
+                .vscroll(true)
                 .show(ctx, |ui| {
+                    theme::tool_style(ui, light);
                     let response =
                         ui.add(egui::TextEdit::multiline(&mut edit.draft).desired_rows(3));
                     if edit.focus {
@@ -1602,7 +1609,9 @@ pub fn ui(
         interaction.dirty = true;
     }
     if editor.help {
-        egui::Window::new("快捷键").open(&mut editor.help).show(ctx, |ui| {
+        egui::Window::new("快捷键").frame(theme::tool_frame(light)).default_width(480.0).max_width((ctx.content_rect().width() - 64.0).max(120.0)).max_height((ctx.content_rect().height() - 100.0).max(80.0)).vscroll(true).open(&mut editor.help).show(ctx, |ui| {
+            theme::tool_style(ui, light);
+            ui.label("选中文本 / 分组后按 Space：把选区提交给 AI；文字编辑中 Space 正常输入空格。未选对象时 Space + 拖动平移。");
             ui.label("Ctrl+C / Ctrl+X / Ctrl+V：复制 / 剪切 / 粘贴选中图对象（支持跨标签页）；编辑文字时使用系统文字剪贴板。");
             ui.label("Delete：删除选中节点及连线；F2：编辑选中节点或连线标题；Ctrl+R：反转选中连线。");
             ui.label("Ctrl+F：搜索当前图；Alt+Enter：节点属性；右键单击：操作菜单（拖动仍为连线或切割）。");
@@ -1692,15 +1701,17 @@ pub fn ui(
     }
     if let Some(error) = editor.error.clone() {
         egui::Modal::new(egui::Id::new("document-error"))
-            .frame(
-                theme::dock_frame(light)
-                    .corner_radius(12)
-                    .inner_margin(16.0),
-            )
+            .frame(theme::tool_frame(light))
             .show(ctx, |ui| {
+                theme::tool_style(ui, light);
+                ui.set_width((ctx.content_rect().width() - 64.0).clamp(120.0, 440.0));
                 ui.heading("操作未完成");
-                ui.label(error);
-                if ui.button("知道了").clicked() {
+                egui::ScrollArea::vertical()
+                    .max_height((ctx.content_rect().height() - 180.0).max(60.0))
+                    .show(ui, |ui| {
+                        ui.label(error);
+                    });
+                if ui.add(theme::primary_button("知道了", light)).clicked() {
                     editor.error = None;
                 }
             });
