@@ -459,6 +459,29 @@ fn rounded(images: &mut Assets<Image>, radius: usize, border: bool, width: f32) 
         RenderAssetUsages::default(),
     );
     image.sampler = bevy::image::ImageSampler::linear();
+    // Nine-slice corners can occupy only a few screen pixels. Bilinear sampling
+    // of the full-resolution raster skips thin strokes at those scales.
+    // White RGB is constant here; filtering alpha preserves edge coverage.
+    let mut level = image::RgbaImage::from_raw(
+        pixels_size,
+        pixels_size,
+        image.data.as_ref().expect("corner pixels").clone(),
+    )
+    .expect("corner RGBA dimensions");
+    while level.width() > 1 || level.height() > 1 {
+        level = image::imageops::resize(
+            &level,
+            (level.width() / 2).max(1),
+            (level.height() / 2).max(1),
+            image::imageops::FilterType::Triangle,
+        );
+        image
+            .data
+            .as_mut()
+            .expect("corner pixels")
+            .extend_from_slice(level.as_raw());
+        image.texture_descriptor.mip_level_count += 1;
+    }
     images.add(image)
 }
 
@@ -738,6 +761,23 @@ mod tests {
         for radius in 0..=24 {
             let fill = images.get(corners.texture(radius, false)).unwrap();
             let border = images.get(corners.texture(radius, true)).unwrap();
+            assert!(border.texture_descriptor.mip_level_count > 1);
+            let mut offset = 0;
+            let mut mip_size = border.texture_descriptor.size.width as usize;
+            for _ in 0..border.texture_descriptor.mip_level_count {
+                let end = offset + mip_size * mip_size * 4;
+                assert!(
+                    border.data.as_ref().unwrap()[offset..end]
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .any(|rgba| rgba[3] > 0),
+                    "outline coverage lost in mip level"
+                );
+                offset = end;
+                mip_size = (mip_size / 2).max(1);
+            }
+            assert_eq!(offset, border.data.as_ref().unwrap().len());
             let width = fill.texture_descriptor.size.width as usize;
             let alpha = |image: &Image, x: usize, y: usize| {
                 image.data.as_ref().unwrap()[(y * width + x) * 4 + 3]
