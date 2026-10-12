@@ -6,9 +6,13 @@ Ravomi 是 Arcraven 的无限画布多 Agent 协作产品。核心定义：召�
 
 ## 文档与设计依据
 
+当前 MVP 必须先读 [MVP](MVP.md) 与 [TODO](TODO.md) P0–P5：保留 Bevy 画布及 Pi 终端网格绘制，全部应用 UI 使用 React + shadcn/ui，通用图标统一 Tabler Icons，迁移后移除 egui / bevy_egui；不得为新 UI 继续增加 egui 或 Bevy UI 控件。仅接入内置 Pi，Alacritty 为终端内核参考，Pi Subagent 为委派机制参考，OSC 7501 为状态协议。子节点连接真实派生的直接母节点，Assets 保留实际 Agent / Run 来源。完整 PRD 路线不扩大本轮首发范围，文档选型不代表实现完成。
+
+当前仅使用 `https://github.com/Ravomi/ravomi-app.git`，默认分支 `main`；历史仓库地址只作来源记录，不再作为 fetch/push 目标。
+
 开始工作先读 [README](README.md) 与 [PRD](PRD.md)；界面工作继续读 [DESIGN](DESIGN.md)、[AI_UI_RULES](AI_UI_RULES.md) 和 [品牌规范](assets/branding/BRAND.md)；运行编排工作读 [AI_DESIGN](AI_DESIGN.md)。PRD 决定产品范围，DESIGN 决定当前目标体验，AI_UI_RULES 约束 AI 如何落实设计，AI_DESIGN 定义尚待实现的运行契约。源码及有环境记录的验证决定哪些能力已实现。
 
-- UI 保持 Arc 参考后的素净与清晰：低饱和外壳、暖白工作区、清晰文字和连接关系，渐进展开细节。角色氛围不扩散为整张画布的模糊、颗粒或强光。
+- UI 保持 Arc 参考后的素净与清晰，沿用 DESIGN 已确认的当前深色主题、语义 token、清晰文字和连接关系，渐进展开细节。早期暖白参考不覆盖当前主题；角色氛围不扩散为整张画布的模糊、颗粒或强光。
 - 小猫为一体团子轮廓、双耳双眼，无嘴、鼻、须、尾巴、脚和四肢；石墨黑主体，局部雾蓝紫细颗粒柔光。复用已确认资产，不因任务角色生成额外五官、装备或不同物种。
 - 连线、移动或分组不自动授权执行、发送全部会话或发布成果；区分任务修订、一次 Run、固定工件版本和人工审阅。多个分支运行时仍须允许人在其他区域操作。
 - 当前实现与目标规范不一致时，记录差距并在当前任务范围内处理；历史截图、旧主题和概念图不覆盖最新文字规范。不要把文档变更报告成代码已完成。

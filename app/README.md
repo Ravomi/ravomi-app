@@ -6,6 +6,8 @@ React + TypeScript 负责界面，Tauri 2 负责原生宿主，现有 Rust `Docu
 
 ## 设计与产品契约
 
+当前目标已确定为 **Bevy 画布 + 全 React UI**，见 [MVP](../MVP.md) 与 [TODO](../TODO.md) P0–P5。React 使用 shadcn/ui、Tabler Icons 和 Ravomi 当前深色语义主题，承载全部应用界面；Bevy 保留画布和 Pi 终端网格绘制，Rust 管理共享事实状态。新增界面不采用 egui，完整迁移后移除其依赖。此处现有对象列表及内嵌输入说明是实现现状，不表示完整画布需重写成 React，也不表示跨平台 WebView 集成已经通过验收。
+
 开始界面工作前阅读根目录的 [PRD](../PRD.md)、[DESIGN](../DESIGN.md) 与 [AI_UI_RULES](../AI_UI_RULES.md)。[AI_DESIGN](../AI_DESIGN.md) 负责 Agent 运行架构，不能替代给 AI 实现 UI 的规范；[README](../README.md) 是项目总入口。
 
 新界面采用 Arc 式素净层次：低饱和侧栏、内嵌暖白工作区、清晰模块和按需出现的详情。迷幻、神秘而克制的气质集中在小猫：一体团子轮廓、两耳两眼，无嘴、鼻、尾或脚；石墨黑主体配局部雾蓝紫细颗粒柔光。正文、连线、表单和状态不使用模糊或颗粒，状态也不能只靠色彩或猫的表情表达。品牌形态与资源见 [BRAND](../assets/branding/BRAND.md)。

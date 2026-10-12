@@ -8,7 +8,7 @@
 
 Ravomi 是 Arcraven 的产品。当前仓库同时包含 Rust/Bevy 画布、`app/` React/Tauri 迁移原型和 Wry 内嵌 React 输入层。`src/collaboration.rs` 与其子模块实现代码 MVP；`src/canvas_ai.rs` 为原生画布入口，`app/src/Collaboration.tsx` 保留独立原型入口。旧上游 `app/src/core/`、`packages/`、AIEngine 等模块没有因此成为本仓库已实现能力。来源见 [MIGRATION](MIGRATION.md)，当前入口见 [README](README.md#文档与项目结构) 和 [app/README](app/README.md)。
 
-原生画布的绑定保存在 `.mio` / 兼容 `.prg` 的附件 `ravomi-code-agents.json`，仅关联输入节点、任务和流程编号；固定源码、完整日志仍位于用户数据目录 `ravomi/code-collaboration-canvas/workflows.json`。与 Tauri 数据目录分开，当前不做两个入口之间的会话迁移。打开画布不自动重发，但 Bevy 全局运行区仍可手动操作本机全部已载入流程；项目副本与运行控制的实例隔离尚未实现。Space 只授权本次固定输入的新流程。Skill 总结使用 `$skill` Run、固定来源证据和同一 Pi 执行器，保存经过人工编辑的内容及证据副本，不自动加载或执行 Skill。
+原生画布的绑定保存在 `.mio` 的附件 `ravomi-code-agents.json`，关联输入节点、任务和流程编号；已连接流程可随项目归档，活动运行事实仍位于用户数据目录 `ravomi/code-collaboration-canvas/workflows.json`，完整边界见 [STORAGE](STORAGE.md)。已移除 `.prg` 支持。与 Tauri 数据目录分开，当前不做两个入口之间的会话迁移。打开画布不自动重发，但 Bevy 全局运行区仍可手动操作本机全部已载入流程；项目副本与运行控制的实例隔离尚未实现。Space 只授权本次固定输入的新流程。Skill 总结使用 `$skill` Run、固定来源证据和同一 Pi 执行器，保存经过人工编辑的内容及证据副本，不自动加载或执行 Skill。
 
 **当前子集与设计差异**：Pi Agent Core / Pi AI 1.0.4 编译为应用私有引擎；Rust 承担 DAG 调度、单任务单 Agent、固定输入快照、显式父子检查任务、取消/重试与按 Run 审阅。画布文字任务不要求外部工程。就绪任务不设固定并发、任务或调用次数上限，单次执行仍有超时和输出大小校验。持久化暂采用单后端互斥锁保护、一次替换整个快照的版本化 JSON，保留 64 MiB 校验边界；不实现本文完整 SQLite 事件模型、独立 Artifact ID 或审阅事件历史。每个 Run ID 标识一次工件版本。任务开始后计划不可修改，修订需新流程；外部会话续聊、工具循环和 Skill 自动复用待实现。画布节点目前是计划内 Agent 的空间投影。代码测试使用隔离目录但具有宿主权限；只导出人工通过的新目录，不写回原项目。完整契约仍作为后续目标，不能以本子集宣称全部完成。
 
@@ -17,6 +17,14 @@ Ravomi 是 Arcraven 的产品。当前仓库同时包含 Rust/Bevy 画布、`app
 “应、必须”表示拟交付契约；“已有”仅指经过仓库核对的能力；性能数字为待验证目标，不代表当前测量结果。本文交付设计，不表示已安装依赖、接入外部服务或实现功能。
 
 ## 1. 产品定位与关键决定
+
+### 本轮实现架构与优先级
+
+以 [MVP](MVP.md) 与 [TODO](TODO.md) P0–P5 为当前交付契约：Bevy 负责画布和 Pi 终端网格，React + shadcn/ui 负责全部应用 UI，Tabler Icons 统一图标，迁移后移除 egui。Rust 持有文档、会话、Run 和 Assets 的事实状态，React 通过命令和订阅交互，不维护另一套执行状态机。Alacritty 为终端内核参考，现有 Wry 输入入口只提供集成基础。
+
+本轮仅内置 Pi；Pi Subagent 用于参考子会话、等待与交接机制。真实委派事件建立直接母子身份，持久化后映射为节点和连线；OSC 7501 仅传达终端状态，不创建任务、不授予权限、不登记 Assets。协议状态按来源 PTY 及记录 ID 隔离，再映射到对应会话/Run；`done` 表示工作结束待查看，不替代工件验证和人工审阅，进程退出也不自动判为成功。
+
+Assets 通过结构化集成登记并保留来源；打开项目不自动恢复执行。终端缓冲区、Pi 对话历史和操作系统进程分别处理。完整检查点、活动运行库迁移、多执行器及复杂编排是后续路线，不要求为本轮终端节点重建完整领域模型。下面的旧卡片交互与 Space 入口记录当前实现，不覆盖新终端交互目标。
 
 ### AI 正文表达与画布呈现（当前代码 MVP）
 

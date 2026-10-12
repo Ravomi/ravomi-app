@@ -16,7 +16,9 @@ Ravomi 是 Arcraven 的多 Agent 画布工作空间。产品目标是在无限�
 
 当前代码使用 Ravomi 名称，共享主题、原生首页及 React 工作区已落实获准风格卡的暖白／石墨方向。图标从已确认头像导出，供网页、原生窗口和 Linux/macOS 打包配置复用；各平台实际安装结果需分别验收。新设计采用低饱和侧栏和清晰工作区。石墨黑 `#202126`、局部雾蓝紫细颗粒柔光主要用于团子猫形象；小猫为一体轮廓、双耳双眼，无嘴、鼻、尾巴或脚。文字、输入框、连线和操作状态保持清晰，不对整层 UI 施加模糊、颗粒或发光。
 
-Ravomi 的 Rust/Bevy 画布架构以本地文档、ECS 场景、GPU 渲染和 egui 编辑界面为基础。源提交、目录对应和许可见 [迁移说明](MIGRATION.md)。代码协作位于 `src/collaboration/`，由 React/Tauri 的独立入口调用编译内置 Pi；其规划、调度、固定版本交接与审阅范围见 [应用说明](app/README.md)。Bevy 空间 Agent 尚未接入；继续实现时必须落实真实状态、上下文来源、结果查看与人工介入路径，不用装饰性 Agent 卡片代替执行模型。
+当前 Rust/Bevy 基线仍包含 egui 编辑界面，两个入口已接入内置 Pi，原生画布已有 Agent 卡片与首轮动态委派，验证边界见 [画布协作](validation/canvas-ai-workflows.md) 和 [子 Agent](validation/subagent-delegation.md)。源提交、目录对应和许可见 [迁移说明](MIGRATION.md)。
+
+目标架构按 [MVP](MVP.md) 和 [TODO](TODO.md) P0–P5：保留 Bevy 画布和 Pi 终端网格绘制，全部应用 UI 改为 React + shadcn/ui，图标统一 Tabler Icons，迁移后移除 egui / bevy_egui。Rust 负责事实数据及 Pi 执行，WebView 通过命令/订阅桥接；Alacritty 为终端内核参考，OSC 7501 用于状态报告。现有独立 Tauri 对象列表、Wry 输入层和未提交探针均不等于完整宿主集成完成。下文 egui 依赖和运行命令记录当前基线，不能据此为新界面继续选用 egui。
 
 历史性能原型曾使用 Project Graph 的 PRG 教程，测量记录保留在 `validation/`。当前仅打开 `.mio` 项目，不再读取 PRG；需要教程的可选回归使用本地 `fixtures/tutorial-shortcut-keys.mio`，夹具不随仓库分发。
 
