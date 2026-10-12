@@ -611,12 +611,14 @@ pub fn sync(
     }
     for (label, mut text_color) in &mut text {
         let n = &scene.0.nodes[label.0];
-        text_color.0 = if n.color[3] > 0.6 {
+        // Geometry revisions during dragging do not change the palette. Avoid
+        // flagging every label and replacing all glyph meshes on those frames.
+        text_color.set_if_neq(TextColor(if n.color[3] > 0.6 {
             let brightness = n.color[0] * 0.2126 + n.color[1] * 0.7152 + n.color[2] * 0.0722;
             palette(brightness > 0.6).text
         } else {
             p.text
-        };
+        }));
     }
 }
 

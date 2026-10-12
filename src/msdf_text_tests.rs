@@ -1,5 +1,52 @@
 use super::*;
+
 use bevy::{asset::AssetPlugin, text::TextPlugin};
+
+#[test]
+fn dragging_group_members_keeps_stationary_text_meshes_and_colors() {
+    use super::super::{NodeLabel, Scene, editor::Editor, theme};
+    use project_graph_bevy_canvas::document::Document;
+    let mut document = Document::blank().unwrap();
+    let moving = document.create_text_node([0.0, 0.0]).unwrap();
+    document
+        .create_group(&std::collections::HashSet::from([moving]))
+        .unwrap();
+    let stationary = document.create_text_node([800.0, 0.0]).unwrap();
+    let mut app = app();
+    app.insert_resource(Scene(document))
+        .init_resource::<ClearColor>()
+        .add_systems(PostUpdate, theme::sync.before(update));
+    let label = app
+        .world_mut()
+        .spawn((NodeLabel(stationary), MsdfText::new("Stationary text")))
+        .id();
+    settle(&mut app);
+    let parts = app.world().get::<TextState>(label).unwrap().parts.clone();
+    let rebuilds = app.world().resource::<MsdfCache>().status().mesh_rebuilds;
+    for _ in 0..30 {
+        {
+            let mut scene = app.world_mut().resource_mut::<Scene>();
+            scene.0.nodes[moving].rect[0] += 16.0;
+            assert!(scene.0.refresh_group_bounds().unwrap());
+        }
+        app.update();
+        assert_eq!(
+            app.world().get::<TextState>(label).unwrap().parts,
+            parts,
+            "dragging must not replace stationary glyph entities"
+        );
+        assert_eq!(
+            app.world().resource::<MsdfCache>().status().mesh_rebuilds,
+            rebuilds
+        );
+    }
+    let old_color = app.world().get::<TextColor>(label).unwrap().0;
+    let light = app.world().resource::<Editor>().light;
+    app.world_mut().resource_mut::<Editor>().light = !light;
+    settle(&mut app);
+    assert_ne!(app.world().get::<TextColor>(label).unwrap().0, old_color);
+    assert!(app.world().resource::<MsdfCache>().status().mesh_rebuilds > rebuilds);
+}
 
 #[test]
 fn native_math_uses_msdf_and_reuses_geometry_while_zooming() {
