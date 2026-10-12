@@ -1,5 +1,7 @@
 # Ravomi 产品需求：画布上的 AI 工作流与多 Agent 协作
 
+> 2026-10-12 首发范围调整：以 [MVP：Pi 终端节点画布](MVP.md) 为当前交付依据。仅接入内置 Pi，以可交互终端节点、真实母子派生关系、Assets 和 OSC 7501 状态显示为核心。本文其余完整产品范围保留为后续路线，已有实现记录不代表新 MVP 已完成。
+
 版本：0.9 · 更新：2026-10-12 · 公司：Arcraven · 产品：Ravomi · 当前阶段：Bevy 与 React/Tauri 已有代码协作 MVP；节点对话检查点、任意历史分叉与跨机恢复待实现。
 
 本文件定义 Ravomi 要解决的问题、产品行为、交付范围与验收标准。[README](README.md) 面向使用者和贡献者；[DESIGN.md](DESIGN.md) 规定 UI/UX；[AI_UI_RULES.md](AI_UI_RULES.md) 将设计要求转换为 AI 实施与检查规则；[品牌规范](assets/branding/BRAND.md) 规定识别系统；[开发指南](DEVELOPMENT.md) 记录实现；[AI_DESIGN.md](AI_DESIGN.md) 保留运行状态机、数据和接口契约。当前仓库已有 `app/` React/Tauri 迁移入口；AI_DESIGN 中尚未落地的历史路径和接口不能据此视为已实现。历史方案中的 Graplu 指本项目前身，来源以 [迁移说明](MIGRATION.md) 为准。
