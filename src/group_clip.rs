@@ -202,6 +202,7 @@ fn update_regions(
     active_materials: Query<&MeshMaterial2d<ClipMaterial>>,
     mut clips: ResMut<Clips>,
     mut buffers: ResMut<Assets<ShaderBuffer>>,
+    mut materials: ResMut<Assets<ClipMaterial>>,
 ) {
     let graph = display.graph(&scene);
     let positions = roots
@@ -211,10 +212,21 @@ fn update_regions(
     let scale = theme::group_scale(camera.single().ok(), export.is_some());
     let (regions, heads) = build_regions(graph, scale, &positions);
     if clips.regions != regions {
-        if let Some(mut buffer) = buffers.get_mut(&clips.buffer) {
+        if clips.regions.len() == regions.len()
+            && let Some(mut buffer) = buffers.get_mut(&clips.buffer)
+        {
             buffer.set_data(regions.clone());
         } else {
+            // A size change reallocates the GPU buffer. Existing material bind
+            // groups retain the old allocation unless the material is updated.
+            // A fresh handle also makes preparation wait for the new GPU asset.
+            let previous = clips.buffer.clone();
             clips.buffer = buffers.add(ShaderBuffer::from(regions.clone()));
+            for (_, material) in materials.iter_mut() {
+                if material.regions == previous {
+                    material.regions = clips.buffer.clone();
+                }
+            }
         }
         clips.regions = regions;
     }
@@ -608,6 +620,61 @@ fn fallback_text(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resizing_regions_rebinds_existing_materials_and_movement_reuses_buffer() {
+        let mut doc = Document::blank().unwrap();
+        let leaf = doc.create_text_node([100.0, 100.0]).unwrap();
+        let group = doc.create_group(&HashSet::from([leaf])).unwrap();
+        let mut app = App::new();
+        app.insert_resource(Scene(doc))
+            .init_resource::<sections::Display>()
+            .init_resource::<Clips>()
+            .init_resource::<Assets<ShaderBuffer>>()
+            .init_resource::<Assets<ClipMaterial>>()
+            .add_systems(Update, update_regions);
+        app.update();
+        let first = app.world().resource::<Clips>().buffer.clone();
+        let material = app
+            .world_mut()
+            .resource_mut::<Assets<ClipMaterial>>()
+            .add(ClipMaterial {
+                content: default(),
+                mask: default(),
+                regions: first.clone(),
+                settings: Settings {
+                    head: 1,
+                    pixel_range: 0.0,
+                    padding: Vec2::ZERO,
+                },
+            });
+        app.world_mut().spawn(MeshMaterial2d(material.clone()));
+        for collapsed in [true, false] {
+            let previous = app.world().resource::<Clips>().buffer.clone();
+            app.world_mut().resource_mut::<Scene>().0.nodes[group].collapsed = collapsed;
+            app.update();
+            let current = app.world().resource::<Clips>().buffer.clone();
+            assert_ne!(
+                current, previous,
+                "resizing must invalidate the old GPU buffer binding"
+            );
+            assert_eq!(
+                app.world()
+                    .resource::<Assets<ClipMaterial>>()
+                    .get(&material)
+                    .unwrap()
+                    .regions,
+                current
+            );
+        }
+        let current = app.world().resource::<Clips>().buffer.clone();
+        app.world_mut().resource_mut::<Scene>().0.nodes[group].rect[0] += 200.0;
+        app.update();
+        assert_eq!(app.world().resource::<Clips>().buffer, current);
+        let clips = app.world().resource::<Clips>();
+        let scene = app.world().resource::<Scene>();
+        assert_eq!(clips.regions[1].bounds.x, center(&scene.0.nodes[group]).x);
+    }
 
     #[test]
     fn ancestors_follow_live_geometry_zoom_and_ungrouping() {
