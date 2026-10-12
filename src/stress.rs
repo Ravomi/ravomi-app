@@ -360,7 +360,7 @@ mod tests {
         );
 
         // A long reactive-window sleep belongs to the previous frame. A new
-        // effect emitted after PreUpdate must receive its full 250 ms lifetime.
+        // effect emitted after PreUpdate must receive its full 200 ms lifetime.
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs(20)));
         app.world_mut().resource_mut::<EmitEdit>().0 = true;
         app.update();
@@ -375,7 +375,7 @@ mod tests {
         );
 
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
-            100,
+            80,
         )));
         app.update();
         app.update();

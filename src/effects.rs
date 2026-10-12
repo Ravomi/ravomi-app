@@ -52,7 +52,6 @@ enum Shape {
     Note {
         center: Vec2,
         size: Vec2,
-        expansion: [f32; 16],
     },
     Trail {
         points: [Vec2; 2],
@@ -126,18 +125,7 @@ impl Effects {
         if !default_zoom || !valid_rect(center, size) {
             return;
         }
-        let mut expansion = [0.0; 16];
-        for i in 1..16 {
-            expansion[i] = expansion[i - 1] + self.random(1.0, 2.0);
-        }
-        self.push(
-            15.0,
-            Shape::Note {
-                center,
-                size,
-                expansion,
-            },
-        );
+        self.push(12.0, Shape::Note { center, size });
     }
 
     /// Only the successful Enter exit shortcut emits this in master; callers
@@ -708,25 +696,31 @@ fn geometry(effects: &Effects, world_per_pixel: f32) -> Result<Mesh, String> {
                         &polyline(&trail, false),
                         super::theme::palette(effects.light)
                             .accent
-                            .with_alpha(alpha * 0.85),
-                        Some(2.5 * world_per_pixel),
+                            .with_alpha(alpha * 0.55),
+                        Some(1.5 * world_per_pixel),
                     )?;
                 }
             }
-            Shape::Note {
-                center,
-                size,
-                expansion,
-            } => {
-                let frame = (n.floor() as usize).min(14);
-                let grow = expansion[frame] + (expansion[frame + 1] - expansion[frame]) * n.fract();
+            Shape::Note { center, size } => {
+                let outline = super::theme::corners::outline_with_radius(
+                    *center,
+                    *size,
+                    super::theme::corners::group_radius(*size, world_per_pixel),
+                );
+                let path = polyline(&outline, true);
+                let tint = super::theme::palette(effects.light).accent;
+                // A faint, local edge wash: no expanding rectangle or particles.
                 paint(
                     &mut buffers,
-                    &rectangle(*center, *size + Vec2::splat(grow * 2.0), 8.0),
-                    super::theme::palette(effects.light)
-                        .accent
-                        .with_alpha(alpha),
-                    Some(2.0),
+                    &path,
+                    tint.with_alpha(0.06 * alpha * alpha),
+                    Some(3.0 * world_per_pixel),
+                )?;
+                paint(
+                    &mut buffers,
+                    &path,
+                    tint.with_alpha(0.35 * alpha * alpha),
+                    Some(world_per_pixel),
                 )?;
             }
             Shape::CreateFlash {

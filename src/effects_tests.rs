@@ -1,6 +1,27 @@
 use super::*;
 
 #[test]
+fn editing_feedback_stays_on_the_node_edge_at_every_zoom() {
+    for scale in [0.25, 1.0, 4.0] {
+        let mut effects = Effects::default();
+        effects.begin_edit(Vec2::ZERO, Vec2::new(60.0, 76.0), true);
+        for _ in 0..3 {
+            let mesh = geometry(&effects, scale).unwrap();
+            let (positions, colors) = vertices(&mesh);
+            assert!(
+                positions.iter().all(|p| {
+                    p[0].abs() <= 30.0 + 1.6 * scale && p[1].abs() <= 38.0 + 1.6 * scale
+                })
+            );
+            assert!(colors.iter().all(|color| color[3] <= 0.35));
+            effects.advance(0.05);
+        }
+        effects.advance(0.05);
+        assert!(!effects.active());
+    }
+}
+
+#[test]
 fn connection_flow_follows_the_curve_and_finishes_without_residual_animation() {
     for hz in [30.0, 60.0, 144.0] {
         let mut effects = Effects::default();
