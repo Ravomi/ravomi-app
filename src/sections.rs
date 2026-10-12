@@ -31,7 +31,18 @@ impl Display {
         let collapsed = doc.nodes.iter().any(|node| node.collapsed);
         let was_projected = self.graph.is_some();
         if collapsed {
+            let bindings = project_graph_bevy_canvas::collaboration::canvas::Bindings::read(doc)
+                .map_err(std::io::Error::other)?;
+            let agents: HashSet<_> = bindings
+                .workflows
+                .iter()
+                .flat_map(|w| &w.agents)
+                .map(|a| a.group_id.as_str())
+                .collect();
             let view = doc.section_view(|_, node| {
+                if agents.contains(node.id.as_str()) {
+                    return Ok(project_graph_bevy_canvas::collaboration::canvas::AGENT_CARD_SIZE);
+                }
                 let content = self
                     .measured
                     .get(&node.id)

@@ -127,6 +127,7 @@ impl Runtime {
             Command::Create { .. }
                 | Command::CreateSkill { .. }
                 | Command::Retry { .. }
+                | Command::FollowUp { .. }
                 | Command::Test { .. }
         );
         let revoke_dispatch = match &command {
@@ -308,6 +309,34 @@ impl Runtime {
                     run.retry_of = Some(previous.id);
                     run.delegation = previous.delegation;
                     w.runs.push(run);
+                }
+                Command::FollowUp {
+                    id,
+                    task_id,
+                    message,
+                } => {
+                    let w = get_workflow(&mut next, &id)?;
+                    let message = message.trim();
+                    if message.is_empty() || message.len() > 16_000 {
+                        return Err("请输入 1 至 16000 字节的消息".into());
+                    }
+                    let previous = latest(w, &task_id).ok_or("此 Agent 尚无完成的回答")?;
+                    if previous.status != Status::Succeeded || previous.proposal.is_none() {
+                        return Err("请等待此 Agent 完成；失败的运行请先重试".into());
+                    }
+                    let sources = vec![previous.id.clone()];
+                    let mut task = w
+                        .plan
+                        .as_ref()
+                        .and_then(|p| p.tasks.iter().find(|t| t.id == task_id))
+                        .cloned()
+                        .ok_or("此节点不是可对话的任务 Agent")?;
+                    task.instruction = format!(
+                        "用户针对你上一版成果的后续消息：{message}\n只处理本条消息，参考所附固定成果，不自动执行其他 Agent 的任务。"
+                    );
+                    let files = merge_inputs(w, &sources)?;
+                    let prompt = task_prompt(w, &task, &sources, &files)?;
+                    w.runs.push(new_run(&task_id, prompt, files, sources));
                 }
                 Command::Resolve { id, run_id } => {
                     let run = get_run(get_workflow(&mut next, &id)?, &run_id)?;

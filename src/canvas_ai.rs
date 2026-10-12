@@ -6,6 +6,8 @@ use std::{
     sync::{Mutex, mpsc},
     time::{Duration, Instant},
 };
+#[path = "canvas_ai/cards.rs"]
+mod cards;
 
 type Completion = (ai::Result<ai::Snapshot>, Option<Pending>);
 struct Pending {
@@ -38,6 +40,8 @@ pub struct State {
     draft: String,
     draft_run: Option<RunRef>,
     notice: String,
+    cards: cards::State,
+    pending_message: Option<(uuid::Uuid, String)>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -63,6 +67,8 @@ impl Default for State {
             draft: String::new(),
             draft_run: None,
             notice: String::new(),
+            cards: default(),
+            pending_message: None,
         }
     }
 }
@@ -102,6 +108,7 @@ impl State {
             | ai::Command::Pause { id }
             | ai::Command::Stop { id, .. }
             | ai::Command::Retry { id, .. }
+            | ai::Command::FollowUp { id, .. }
             | ai::Command::Resolve { id, .. }
             | ai::Command::Review { id, .. }
             | ai::Command::Test { id, .. } => owns(id),
@@ -242,7 +249,11 @@ impl State {
         if let Some(Ok((result, pending))) = completion {
             self.busy = false;
             *self.receiver.get_mut().map_err(|e| e.to_string())? = None;
+            let message = self.pending_message.take();
             let snapshot = result?;
+            if let Some((token, node)) = message {
+                self.cards.clear_sent(token, &node);
+            }
             if let Some(pending) = pending {
                 let w = snapshot.workflows.last().ok_or("未创建流程")?;
                 if let Some(target) = tabs.document_mut(doc, pending.document_token) {
@@ -272,6 +283,7 @@ impl State {
         } else if matches!(completion, Some(Err(mpsc::TryRecvError::Disconnected))) {
             self.busy = false;
             *self.receiver.get_mut().map_err(|e| e.to_string())? = None;
+            self.pending_message = None;
             return Err("AI 操作线程异常退出".into());
         }
         if self.last_poll.elapsed() >= Duration::from_millis(300) {
@@ -336,11 +348,17 @@ pub fn ui(
     windows: Query<&Window, With<PrimaryWindow>>,
     mut tabs: ResMut<tabs::Tabs>,
     config: Res<Config>,
+    camera: Query<(&Transform, &Projection), With<Camera2d>>,
 ) -> bevy::ecs::error::Result {
     if config.no_ui {
         return Ok(());
     }
     let ctx = contexts.ctx_mut()?;
+    if state.cards.handoff_canvas_press(ctx) && editor.active.is_none() {
+        // Drop only the previous keyboard capture. Modal/pointer/navigation
+        // guards still apply; this same press can now select the canvas.
+        editor.capture = editor.navigation_capture;
+    }
     let instances = tabs.instance_tokens(&scene.0);
     state.owners.retain(|_, owner| instances.contains(owner));
     state
@@ -461,6 +479,41 @@ pub fn ui(
     }
     let selected_runs = bindings.selected_runs(&scene.0, &interaction.selected, &connected);
     let mut command = None;
+    let mut sent_node = None;
+    if !editor.home_visible()
+        && editor.active.is_none()
+        && let Ok((camera, Projection::Orthographic(projection))) = camera.single()
+        && let Ok(window) = windows.single()
+    {
+        let State {
+            cards,
+            owners,
+            busy,
+            ..
+        } = &mut *state;
+        match cards.show(
+            ctx,
+            &mut scene.0,
+            &bindings,
+            owners,
+            &interaction.selected,
+            &display,
+            camera,
+            projection,
+            window,
+            *busy,
+            editor.light,
+            &instances,
+        ) {
+            Ok(Some((message, node))) => {
+                command = Some(message);
+                sent_node = Some(node);
+                submit = false;
+            }
+            Ok(None) => {}
+            Err(error) => editor.report_error(error),
+        }
+    }
     let mut new_skill = false;
     let mut connect = false;
     // Submitting from the canvas must not open a panel over the task nodes.
@@ -691,10 +744,15 @@ pub fn ui(
         ) {
             editor.report_error(e);
         }
-    } else if let Some(command) = command
-        && let Err(e) = state.dispatch(token, command, None)
-    {
-        editor.report_error(e);
+    } else if let Some(command) = command {
+        match state.dispatch(token, command, None) {
+            Ok(()) => {
+                if let Some(node) = sent_node {
+                    state.pending_message = Some((token, node));
+                }
+            }
+            Err(e) => editor.report_error(e),
+        }
     }
     editor.capture |= ctx.egui_wants_pointer_input() || ctx.egui_wants_keyboard_input();
     editor.navigation_capture |= ctx.egui_wants_pointer_input();

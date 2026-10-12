@@ -601,6 +601,75 @@ fn all_ready_agents_start_without_task_concurrency_or_call_caps() {
 }
 
 #[test]
+fn follow_up_targets_one_agent_and_keeps_fixed_previous_result() {
+    let directory = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let runtime =
+        Runtime::with_executor(directory.path().into(), Arc::new(Fake::default())).unwrap();
+    let id = create(&runtime, project.path());
+    let planned = wait(&runtime, |w| w.draft_plan.is_some());
+    runtime
+        .command(Command::SetPlan {
+            id: id.clone(),
+            plan: planned.draft_plan.unwrap(),
+        })
+        .unwrap();
+    runtime.command(Command::Start { id: id.clone() }).unwrap();
+    let before = wait(&runtime, |w| {
+        w.runs.len() == 5 && w.runs.iter().all(|r| r.status == Status::Succeeded)
+    });
+    let previous = before.runs.iter().find(|r| r.task_id == "code").unwrap();
+    let result = runtime
+        .command(Command::FollowUp {
+            id: id.clone(),
+            task_id: "code".into(),
+            message: "补充边界情况说明".into(),
+        })
+        .unwrap();
+    let run = result.workflows[0].runs.last().unwrap();
+    assert_eq!(run.task_id, "code");
+    assert_eq!(run.sources, vec![previous.id.clone()]);
+    assert!(run.prompt.contains("补充边界情况说明"));
+    assert!(
+        runtime
+            .command(Command::FollowUp {
+                id: id.clone(),
+                task_id: "code".into(),
+                message: "不能重复派发".into()
+            })
+            .is_err()
+    );
+    let finished = wait(&runtime, |w| {
+        w.runs.len() == 6 && w.runs.last().unwrap().status == Status::Succeeded
+    });
+    assert_eq!(
+        serde_json::to_value(&before.runs).unwrap(),
+        serde_json::to_value(&finished.runs[..5]).unwrap()
+    );
+    for (task, message) in [
+        ("code", " "),
+        ("$plan", "不要把规划节点当执行节点"),
+        ("missing", "不存在"),
+    ] {
+        assert!(
+            runtime
+                .command(Command::FollowUp {
+                    id: id.clone(),
+                    task_id: task.into(),
+                    message: message.into()
+                })
+                .is_err()
+        );
+    }
+    let history =
+        crate::project_history::History::capture(&runtime.snapshot().unwrap(), &[id]).unwrap();
+    assert_eq!(
+        history.workflows[0].runs.last().unwrap().sources,
+        vec![previous.id.clone()]
+    );
+}
+
+#[test]
 fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_versions() {
     use crate::document::Document;
     use std::collections::HashSet;
@@ -649,7 +718,7 @@ fn canvas_agents_capture_group_inputs_and_preserve_deleted_nodes_and_run_version
         .iter()
         .position(|n| n.id == planner.group_id)
         .unwrap();
-    assert!(!doc.nodes[index].collapsed);
+    assert!(doc.nodes[index].collapsed);
     let log = &planner.log_id;
     assert!(
         doc.nodes

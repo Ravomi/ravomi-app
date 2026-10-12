@@ -6,6 +6,7 @@ mod mind_map;
 mod network;
 
 const ATTACHMENT: &str = "ravomi-code-agents.json";
+pub const AGENT_CARD_SIZE: [f32; 2] = [360.0, 180.0];
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Bindings {
@@ -324,16 +325,10 @@ impl Bindings {
                 let heading = format!("{title} · {state}");
                 let latest = runs.last().copied();
                 let body = response_body(w, &task_id, latest, parent.as_deref());
-                // Present each completed result once. Later refreshes preserve a
-                // user's choice to collapse it, including after saving/reopening.
+                // Completing a run never unfolds a large log over nearby work.
                 if let Some(run) = latest.filter(|r| r.status == Status::Succeeded)
                     && agent.presented_run_id.as_deref() != Some(&run.id)
                 {
-                    if let Some(node) = doc.graph.nodes.iter_mut().find(|n| n.id == agent.group_id)
-                    {
-                        node.collapsed = false;
-                        changed_text = true;
-                    }
                     agent.presented_run_id = Some(run.id.clone());
                 }
                 for (id, text) in [(&agent.group_id, heading), (&agent.log_id, body)] {

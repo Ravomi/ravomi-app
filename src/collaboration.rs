@@ -171,6 +171,11 @@ pub enum Command {
         id: String,
         run_id: String,
     },
+    FollowUp {
+        id: String,
+        task_id: String,
+        message: String,
+    },
     Resolve {
         id: String,
         run_id: String,
