@@ -730,6 +730,29 @@ mod tests {
     }
 
     #[test]
+    fn fractional_colors_keep_content_hashes_after_json_roundtrip() {
+        let file = ProjectFile {
+            stage: serde_json::json!([{
+                "_": "TextNode", "uuid": "fractional-color", "text": "色彩",
+                "collisionBox": {"shapes": [{"_": "Rectangle",
+                    "location": {"x": 0, "y": 0}, "size": {"x": 100, "y": 80}}]},
+                "color": {"r": 0.23_f32 as f64 * 255.0,
+                          "g": 0.47_f32 as f64 * 255.0,
+                          "b": 0.79_f32 as f64 * 255.0,
+                          "a": 0.8_f32 as f64}
+            }]),
+            attachments: BTreeMap::new(),
+        };
+        let encoded = encode(&file, &History::default(), &BTreeMap::new()).unwrap();
+        let stage = serde_json::from_slice(&serde_json::to_vec(&file.stage).unwrap()).unwrap();
+        let decoded = ProjectFile {
+            stage,
+            attachments: BTreeMap::new(),
+        };
+        assert!(encoded == encode(&decoded, &History::default(), &BTreeMap::new()).unwrap());
+    }
+
+    #[test]
     fn interrupted_writer_child() {
         let Some(path) = std::env::var_os("RAVOMI_TEST_SQLITE_CRASH_PATH") else {
             return;
