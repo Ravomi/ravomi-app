@@ -1263,6 +1263,10 @@ pub fn ui(
                         ui.spacing_mut().item_spacing.x = 2.0;
                     }
                     ui.horizontal(|ui| {
+                        editor.export.status_button(ui);
+                        if let Some(hint) = interaction.jump.hint() {
+                            ui.weak(hint);
+                        }
                         let enabled =
                             !editor.tabs_blocked() && !editor.closing && !tabs.closing_tab();
                         let menu = ui
@@ -1336,55 +1340,6 @@ pub fn ui(
         editor.dock_space = Some((ctx.content_rect().left(), controls.response.rect.left()));
     }
     tabs.bar(ctx, &scene.0, &mut editor);
-    if !editor.home.visible {
-        egui::Area::new("status".into())
-            .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
-            .show(ctx, |ui| {
-                ui.set_max_width((window.width() / ctx.zoom_factor() - 48.0).max(220.0));
-                egui::Frame::new()
-                    .fill(ui.visuals().panel_fill.gamma_multiply(0.92))
-                    .corner_radius(12)
-                    .inner_margin(8.0)
-                    .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(format!(
-                                "{} 节点 · {} 连线 · 已选 {}",
-                                scene.0.nodes.len(),
-                                scene.0.edges.len(),
-                                interaction.selected.len()
-                            ));
-                            ui.separator();
-                            ui.label(format!("{:.0}%", 100.0 / projection.scale));
-                            ui.separator();
-                            ui.label(if scene.0.dirty() || active_at_start {
-                                "有未保存的修改"
-                            } else {
-                                "已保存"
-                            });
-                            if editor.dialog.is_some() {
-                                ui.spinner();
-                                ui.label("请选择保存位置…");
-                            }
-                            editor.export.status_button(ui);
-                            if let Some(hint) = interaction.jump.hint() {
-                                ui.separator();
-                                ui.label(hint);
-                            }
-                            if physics.enabled && physics.running {
-                                ui.separator();
-                                ui.label(if physics.running {
-                                    format!(
-                                        "物理 {:.2} ms · 活动 {} / 休眠 {}",
-                                        physics.step_ms, physics.active, physics.sleeping
-                                    )
-                                } else {
-                                    "物理已停稳".into()
-                                });
-                            }
-                        });
-                    });
-            });
-    }
     let mut commit = false;
     if editor.about {
         let width = (ctx.content_rect().width() - 64.0).clamp(200.0, 520.0);
