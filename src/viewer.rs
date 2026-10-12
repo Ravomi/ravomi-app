@@ -1627,7 +1627,12 @@ fn movement_effects(
             && let Some(node) = scene.0.nodes.get(visual.0)
             && matches!(node.kind.as_str(), "TextNode" | "Section" | "UrlNode")
         {
-            effects.move_trail(position, Vec2::new(node.rect[2], node.rect[3]), delta);
+            effects.move_trail(
+                visual.0,
+                position,
+                Vec2::new(node.rect[2], node.rect[3]),
+                delta,
+            );
         }
     }
 }

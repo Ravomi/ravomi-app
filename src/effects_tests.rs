@@ -480,7 +480,7 @@ fn master_lifetimes_are_frame_rate_independent_and_eventually_idle() {
     for fps in [30, 60, 120, 144] {
         let mut effects = Effects::default();
         effects.begin_edit(Vec2::ZERO, Vec2::splat(100.0), true);
-        effects.move_trail(Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 2.0);
+        effects.move_trail(0, Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 2.0);
         for _ in 0..fps / 2 {
             effects.advance(1.0 / fps as f32);
         }
@@ -493,20 +493,31 @@ fn master_lifetimes_are_frame_rate_independent_and_eventually_idle() {
 }
 
 #[test]
-fn movement_spawns_two_points_on_trailing_edge_and_ignores_small_deltas() {
+fn movement_feedback_follows_each_node_without_accumulating_particles() {
     let mut effects = Effects::default();
-    effects.move_trail(Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 0.9);
+    effects.move_trail(0, Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 0.9);
     assert!(!effects.active());
-    effects.move_trail(Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 2.0);
-    let Shape::Trail { points, velocities } = &effects.items[0].shape else {
-        panic!()
-    };
-    for (p, v) in points.iter().zip(velocities) {
-        assert_eq!(p.x, -50.0);
-        assert!(p.y.abs() <= 50.0);
-        assert!(v.x < 0.0);
-        assert!((0.2..=2.0).contains(&v.length()));
+    for step in 0..200 {
+        effects.move_trail(0, Vec2::X * step as f32, Vec2::splat(100.0), Vec2::X * 2.0);
+        effects.advance(1.0 / 144.0);
     }
+    assert_eq!(effects.items.len(), 1);
+    effects.move_trail(0, Vec2::ZERO, Vec2::splat(100.0), -Vec2::X * 2.0);
+    for scale in [0.25, 1.0, 4.0] {
+        let mesh = geometry(&effects, scale).unwrap();
+        let (positions, colors) = vertices(&mesh);
+        assert!(
+            positions
+                .iter()
+                .all(|p| (p[0] - 50.0).abs() <= 2.01 * scale)
+        );
+        assert!(positions.iter().all(|p| p[1].abs() <= 18.01 * scale));
+        assert!(colors.iter().all(|color| color[3] <= 0.16));
+    }
+    effects.move_trail(1, Vec2::ZERO, Vec2::splat(100.0), Vec2::Y * 2.0);
+    assert_eq!(effects.items.len(), 2);
+    effects.advance(0.17);
+    assert!(!effects.active());
 }
 
 #[test]
@@ -515,8 +526,8 @@ fn edit_zoom_gating_and_capacity_bound() {
     effects.begin_edit(Vec2::ZERO, Vec2::ONE, false);
     effects.commit_edit(Vec2::ZERO, Vec2::ONE, false);
     assert!(!effects.active());
-    for _ in 0..MAX_EFFECTS * 2 {
-        effects.move_trail(Vec2::ZERO, Vec2::splat(100.0), Vec2::X);
+    for node in 0..MAX_EFFECTS * 2 {
+        effects.move_trail(node, Vec2::ZERO, Vec2::splat(100.0), Vec2::X);
     }
     assert_eq!(effects.items.len(), MAX_EFFECTS);
     effects.advance(10.0);
@@ -563,7 +574,7 @@ fn split_uses_clipped_pieces_and_preserves_area() {
 fn all_effect_shapes_tessellate_and_split_expires() {
     let mut effects = Effects::default();
     effects.begin_edit(Vec2::ZERO, Vec2::splat(100.0), true);
-    effects.move_trail(Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 10.0);
+    effects.move_trail(0, Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 10.0);
     effects.cut_line(Vec2::new(-60.0, 0.0), Vec2::new(60.0, 0.0));
     effects.split(
         Vec2::ZERO,

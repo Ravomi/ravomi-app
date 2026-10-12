@@ -54,8 +54,10 @@ enum Shape {
         size: Vec2,
     },
     Trail {
-        points: [Vec2; 2],
-        velocities: [Vec2; 2],
+        node: usize,
+        center: Vec2,
+        size: Vec2,
+        direction: Vec2,
     },
     Cut {
         from: Vec2,
@@ -135,30 +137,27 @@ impl Effects {
     }
 
     /// Supply the rectangle *after* movement and the actual world displacement.
-    pub fn move_trail(&mut self, center: Vec2, size: Vec2, delta: Vec2) {
+    pub fn move_trail(&mut self, node: usize, center: Vec2, size: Vec2, delta: Vec2) {
         if !valid_rect(center, size) || !delta.is_finite() || delta.length() < 1.0 {
             return;
         }
-        let mut points = [center; 2];
-        let mut velocities = [Vec2::ZERO; 2];
-        for i in 0..2 {
-            if delta.y.abs() > delta.x.abs() {
-                points[i] += Vec2::new(
-                    self.random(-0.5, 0.5) * size.x,
-                    -delta.y.signum() * size.y * 0.5,
-                );
-            } else {
-                points[i] += Vec2::new(
-                    -delta.x.signum() * size.x * 0.5,
-                    self.random(-0.5, 0.5) * size.y,
-                );
-            }
-            let speed = -delta * self.random(0.1, 1.0);
-            velocities[i] =
-                Vec2::from_angle(self.random(-30.0_f32.to_radians(), 30.0_f32.to_radians()))
-                    .rotate(speed);
+        let shape = Shape::Trail {
+            node,
+            center,
+            size,
+            direction: delta.normalize(),
+        };
+        // Follow each node instead of accumulating detached particles per frame.
+        if let Some(effect) = self
+            .items
+            .iter_mut()
+            .find(|effect| matches!(effect.shape, Shape::Trail { node: id, .. } if id == node))
+        {
+            effect.frames = 0.0;
+            effect.shape = shape;
+        } else {
+            self.push(10.0, shape);
         }
-        self.push(30.0, Shape::Trail { points, velocities });
     }
 
     pub fn cut_line(&mut self, from: Vec2, to: Vec2) {
@@ -737,18 +736,40 @@ fn geometry(effects: &Effects, world_per_pixel: f32) -> Result<Mesh, String> {
                     Some(1.5 * world_per_pixel),
                 )?;
             }
-            Shape::Trail { points, velocities } => {
-                // Sum of master's per-tick v*(1-t/30), extended continuously.
-                let displacement = n - n * (n + 1.0) / 60.0;
-                for i in 0..2 {
-                    let center = points[i] + velocities[i] * displacement + Vec2::new(0.5, -0.5);
-                    paint(
-                        &mut buffers,
-                        &rectangle(center, Vec2::ONE, 0.0),
-                        Color::WHITE.with_alpha(alpha),
-                        None,
-                    )?;
-                }
+            Shape::Trail {
+                center,
+                size,
+                direction,
+                ..
+            } => {
+                let (edge, tangent, length) = if direction.y.abs() > direction.x.abs() {
+                    (
+                        *center - Vec2::Y * direction.y.signum() * size.y * 0.5,
+                        Vec2::X,
+                        size.x,
+                    )
+                } else {
+                    (
+                        *center - Vec2::X * direction.x.signum() * size.x * 0.5,
+                        Vec2::Y,
+                        size.y,
+                    )
+                };
+                let half = (length * 0.18).min(18.0 * world_per_pixel);
+                let path = polyline(&[edge - tangent * half, edge + tangent * half], false);
+                let tint = super::theme::palette(effects.light).accent;
+                paint(
+                    &mut buffers,
+                    &path,
+                    tint.with_alpha(0.025 * alpha * alpha),
+                    Some(4.0 * world_per_pixel),
+                )?;
+                paint(
+                    &mut buffers,
+                    &path,
+                    tint.with_alpha(0.16 * alpha * alpha),
+                    Some(world_per_pixel),
+                )?;
             }
             Shape::Cut {
                 from,
