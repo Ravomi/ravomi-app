@@ -10,6 +10,8 @@ MVP 只接入内置 Pi，不提供 Codex、Claude Code 或其他执行器入口�
 
 ## 2. 已指定的参考项目
 
+通用 UI 图标已确定使用 [Tabler Icons](https://github.com/tabler/tabler-icons)，默认采用 Outline 样式；React 与原生画布保持同一套图标语义，具体规则见 [AI_UI_RULES](AI_UI_RULES.md)。品牌猫继续使用既有确认资产。图标库选型不决定 UI 框架，现有图标迁移尚待实现。
+
 | 项目或规范 | 参考与复用范围 | 接入边界 |
 | --- | --- | --- |
 | [Alacritty](https://github.com/alacritty/alacritty) / [alacritty_terminal](https://docs.rs/alacritty_terminal/latest/alacritty_terminal/) | 终端状态、转义序列处理、PTY 读写、滚动与终端交互；优先评估复用其 Rust 内核 | Ravomi 承担画布节点、渲染与焦点整合；不把外部 Alacritty 桌面窗口贴进画布。具体依赖版本在实现时固定，保留许可证和来源 |
