@@ -126,6 +126,36 @@ fn click(app: &mut App) {
 }
 
 #[test]
+fn empty_node_double_click_accepts_slower_tap_with_small_drift() {
+    let mut app = input_app();
+    {
+        let mut scene = app.world_mut().resource_mut::<Scene>();
+        scene.0.nodes[0].text.clear();
+        scene.0.nodes[0].rect = [-30.0, -38.0, 60.0, 76.0];
+    }
+    let world = app.world_mut();
+    world
+        .query::<&mut Window>()
+        .single_mut(world)
+        .unwrap()
+        .set_cursor_position(Some(Vec2::new(640.0, 400.0)));
+    click(&mut app);
+    app.world_mut().resource_mut::<Interaction>().last_click = Some((
+        0,
+        Instant::now() - Duration::from_millis(450),
+        Vec2::new(634.0, 400.0),
+    ));
+    click(&mut app);
+    let scene = app.world().resource::<Scene>();
+    assert!(
+        app.world()
+            .resource::<editor::Editor>()
+            .is_editing(&scene.0.nodes[0])
+    );
+    assert_eq!(scene.0.nodes.len(), 2);
+}
+
+#[test]
 fn empty_canvas_double_click_creates_selects_and_undoes_one_node_without_dragging() {
     let mut app = input_app();
     click(&mut app);

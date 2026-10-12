@@ -470,6 +470,17 @@ fn padding(node: &GraphNode) -> f32 {
         node.font_size * 14.0 / 32.0
     }
 }
+fn empty_text_size(node: &GraphNode) -> [f32; 2] {
+    let inset = 2.0 * padding(node);
+    [
+        if node.auto_size {
+            node.font_size + inset
+        } else {
+            node.rect[2]
+        },
+        (node.font_size * 1.5 + inset).max(48.0),
+    ]
+}
 fn text_width(node: &GraphNode) -> Option<f32> {
     (!node.auto_size && !node.collapsed).then(|| (node.rect[2] - 2.0 * padding(node)).max(1.0))
 }
@@ -1397,7 +1408,9 @@ fn input(
             }
             interaction.creation.cancel();
             if interaction.last_click.is_some_and(|(i, t, screen)| {
-                i == hit && t.elapsed().as_millis() < 350 && screen.distance_squared(cursor) < 25.0
+                i == hit
+                    && t.elapsed() <= creation::DOUBLE_CLICK_INTERVAL
+                    && screen.distance_squared(cursor) <= creation::CLICK_SLOP_SQUARED
             }) && scene.0.nodes[hit].kind == "UrlNode"
             {
                 physics.finish(&mut scene.0);
@@ -1410,7 +1423,9 @@ fn input(
                 return;
             }
             if interaction.last_click.is_some_and(|(i, t, screen)| {
-                i == hit && t.elapsed().as_millis() < 350 && screen.distance_squared(cursor) < 25.0
+                i == hit
+                    && t.elapsed() <= creation::DOUBLE_CLICK_INTERVAL
+                    && screen.distance_squared(cursor) <= creation::CLICK_SLOP_SQUARED
             }) && scene.0.can_edit_text(hit)
             {
                 physics.finish(&mut scene.0);

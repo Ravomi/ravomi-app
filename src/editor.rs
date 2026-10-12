@@ -114,6 +114,45 @@ mod inline_edit_tests {
     use super::*;
 
     #[test]
+    fn empty_node_keeps_its_editing_size_after_canvas_layout() {
+        let mut doc = stress::synthetic(1, false, false, false).unwrap();
+        let node = &mut doc.nodes[0];
+        node.text.clear();
+        node.auto_size = true;
+        node.font_size = 32.0;
+        node.rect = [0.0, 0.0, 60.0, 76.0];
+        let mut editor = Editor::default();
+        editor.begin(node);
+        let editing_size = editor.active.as_ref().unwrap().size;
+        editor.commit(&mut doc);
+        let mut images = Assets::<Image>::default();
+        let mut app = App::new();
+        app.insert_resource(Scene(doc))
+            .insert_resource(editor)
+            .init_resource::<physics::PhysicsEditor>()
+            .init_resource::<Interaction>()
+            .insert_resource(NodeAssets {
+                font: default(),
+                corners: theme::NodeCorners::new(&mut images),
+                textures: default(),
+            })
+            .add_systems(Update, fit_text_nodes);
+        app.world_mut().spawn((
+            NodeLabel(0),
+            Transform::default(),
+            bevy::text::TextLayoutInfo {
+                size: Vec2::new(0.0, 48.0),
+                ..default()
+            },
+        ));
+        app.update();
+        assert_eq!(
+            app.world().resource::<Scene>().0.nodes[0].rect[2..4],
+            editing_size
+        );
+    }
+
+    #[test]
     fn rounded_node_preserves_edit_preview_and_restores_after_editing() {
         let mut doc = stress::synthetic(1, false, false, false).unwrap();
         doc.nodes[0].rect = [0.0, 0.0, 100.0, 80.0];
@@ -707,7 +746,11 @@ impl Editor {
             edge: false,
             id: node.id.clone(),
             draft: node.text.clone(),
-            size: [node.rect[2], node.rect[3]],
+            size: if node.kind == "TextNode" && node.text.is_empty() {
+                empty_text_size(node)
+            } else {
+                [node.rect[2], node.rect[3]]
+            },
             focus: true,
             composing: false,
         });
@@ -729,6 +772,7 @@ impl Editor {
         self.begin(node);
         if let Some(edit) = &mut self.active {
             edit.draft.clear();
+            edit.size = empty_text_size(node);
         }
     }
     pub(super) fn commit(&mut self, doc: &mut Document) -> bool {
@@ -1513,10 +1557,7 @@ pub fn ui(
             if section {
                 edit.size = [node.rect[2], node.rect[3]];
             } else if edit.draft.is_empty() {
-                edit.size = [
-                    node.rect[2],
-                    (node.font_size * 1.5 + 2.0 * padding(node)).max(48.0),
-                ];
+                edit.size = empty_text_size(node);
             } else if edit.draft != node.text {
                 let layout = layout_text(
                     ctx,
@@ -1774,7 +1815,7 @@ pub fn fit_text_nodes(
     mut pending: Local<HashMap<Entity, (usize, Vec2)>>,
 ) {
     for (entity, label, info) in &measured {
-        if info.size.is_finite() && info.size.y > 0.0 {
+        if info.size.is_finite() && info.size.min_element() >= 0.0 {
             pending.insert(entity, (label.0, info.size));
         }
     }
@@ -1793,6 +1834,9 @@ pub fn fit_text_nodes(
         if node.kind != "TextNode" {
             return false;
         }
+        if !node.text.is_empty() && content.y <= 0.0 {
+            return false;
+        }
         if editor
             .active
             .as_ref()
@@ -1801,14 +1845,18 @@ pub fn fit_text_nodes(
             return true;
         }
         let inset = 2.0 * padding(node);
-        let size = [
-            if node.auto_size {
-                (content.x + inset).max(1.0)
-            } else {
-                node.rect[2]
-            },
-            (content.y + inset).max(48.0),
-        ];
+        let size = if node.text.is_empty() {
+            empty_text_size(node)
+        } else {
+            [
+                if node.auto_size {
+                    (content.x + inset).max(1.0)
+                } else {
+                    node.rect[2]
+                },
+                (content.y + inset).max(48.0),
+            ]
+        };
         if scene.0.apply_layout_size(*index, size) {
             if let Ok(mut transform) = labels.get_mut(*entity) {
                 let node = &scene.0.nodes[*index];

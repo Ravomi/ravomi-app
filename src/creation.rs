@@ -4,8 +4,8 @@ use super::*;
 use std::time::Duration;
 
 // Logical screen pixels: tolerate touchpad tap drift without accepting a drag.
-const CLICK_SLOP_SQUARED: f32 = 8.0 * 8.0;
-const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(500);
+pub(super) const CLICK_SLOP_SQUARED: f32 = 8.0 * 8.0;
+pub(super) const DOUBLE_CLICK_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Default)]
 pub struct Gesture {
