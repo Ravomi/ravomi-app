@@ -1,7 +1,4 @@
-//! Project Graph master feedback effects, expressed in world units (Y up).
-//! Reference: feedbackService/effectEngine/{NodeMoveShadowEffect,
-//! RectangleLittleNoteEffect,LineCuttingEffect,RectangleSplitTwoPartEffect}.
-//! Rounded cutting geometry and motion follow Godot's stage_object_slicer.gd.
+//! Canvas feedback effects, expressed in world units (Y up).
 //! Lyon and Bevy's built-in ColorMaterial provide one shared transient mesh;
 //! a GPU particle framework is unnecessary for this bounded feedback workload.
 use bevy::{
@@ -12,14 +9,9 @@ use bevy::{
 };
 use lyon_tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, StrokeOptions, StrokeTessellator,
-    StrokeVertex, VertexBuffers,
-    math::{Box2D, point},
-    path::{Path, Winding, builder::BorderRadii},
+    StrokeVertex, VertexBuffers, math::point, path::Path,
 };
-use std::{
-    collections::{VecDeque, hash_map::RandomState},
-    hash::{BuildHasher, Hasher},
-};
+use std::collections::VecDeque;
 
 const MAX_EFFECTS: usize = 512;
 const FPS: f32 = 60.0;
@@ -29,13 +21,10 @@ pub struct Effects {
     pub light: bool,
     items: VecDeque<Effect>,
     preview: Option<CutPreview>,
-    entropy: RandomState,
-    sample: u64,
 }
 
 pub struct CutPreview {
     pub line: [Vec2; 2],
-    pub boxes: Vec<(Vec2, Vec2)>,
     pub edges: Vec<(Vec<[Vec2; 2]>, bool)>,
 }
 
@@ -68,20 +57,6 @@ enum Shape {
     Contact {
         point: Vec2,
     },
-    Shard {
-        polygon: Vec<Vec2>,
-        velocity: Vec2,
-        fill: Color,
-        border: Color,
-    },
-    Dust {
-        particles: Vec<(Vec2, Vec2, f32)>,
-    },
-    CreateFlash {
-        center: Vec2,
-        size: Vec2,
-        color: Color,
-    },
 }
 
 impl Effects {
@@ -101,14 +76,6 @@ impl Effects {
 
     pub fn cutting_preview(&mut self, preview: Option<CutPreview>) {
         self.preview = preview;
-    }
-
-    // Reuse std's randomly seeded hashing for visual variation; no custom PRNG.
-    fn random(&mut self, low: f32, high: f32) -> f32 {
-        let mut hash = self.entropy.build_hasher();
-        hash.write_u64(self.sample);
-        self.sample = self.sample.wrapping_add(1);
-        low + (high - low) * ((hash.finish() >> 40) as f32 / 16_777_216.0)
     }
 
     fn push(&mut self, duration: f32, shape: Shape) {
@@ -180,68 +147,6 @@ impl Effects {
         }
     }
 
-    /// Clip the visible rounded outline, matching Godot's stage_object_slicer.
-    #[allow(clippy::too_many_arguments)]
-    pub fn split(
-        &mut self,
-        center: Vec2,
-        size: Vec2,
-        from: Vec2,
-        to: Vec2,
-        fill: Color,
-        border: Color,
-    ) {
-        let mut polygons = split_polygons(center, size, from, to);
-        if !(polygons.len() == 2 || polygons.len() == 4)
-            || polygons
-                .iter()
-                .any(|p| !(3..=110).contains(&p.len()) || p.iter().any(|v| !v.is_finite()))
-        {
-            return;
-        }
-        let four = polygons.len() == 4;
-        let direction = (to - from).normalize_or_zero();
-        let normal = direction.perp();
-        let particles = (0..30)
-            .map(|_| {
-                let offset = Vec2::new(self.random(-0.5, 0.5), self.random(-0.5, 0.5)) * size;
-                (
-                    center + offset,
-                    offset.normalize_or(Vec2::X) * self.random(30.0, 600.0) / FPS,
-                    self.random(1.0, 2.0),
-                )
-            })
-            .collect();
-        self.push(30.0, Shape::Dust { particles });
-        polygons.sort_by(|a, b| bounds_center(a).x.total_cmp(&bounds_center(b).x));
-        for (index, polygon) in polygons.into_iter().enumerate() {
-            let velocity = if four {
-                let speed = Vec2::Y * self.random(1.0, 11.0).floor();
-                Vec2::from_angle(self.random(-45.0_f32.to_radians(), 45.0_f32.to_radians()))
-                    .rotate(speed)
-            } else {
-                let centroid = polygon.iter().copied().sum::<Vec2>() / polygon.len() as f32;
-                let side = direction.perp_dot(centroid - from).signum();
-                let side = if side == 0.0 {
-                    if index == 0 { -1.0 } else { 1.0 }
-                } else {
-                    side
-                };
-                normal * side * self.random(90.0, 240.0) / FPS
-                    + Vec2::Y * self.random(60.0, 180.0) / FPS
-            };
-            self.push(
-                50.0,
-                Shape::Shard {
-                    polygon,
-                    velocity,
-                    fill,
-                    border,
-                },
-            );
-        }
-    }
-
     fn advance(&mut self, seconds: f32) {
         if !seconds.is_finite() || seconds <= 0.0 {
             return;
@@ -256,18 +161,6 @@ impl Effects {
 
 fn valid_rect(center: Vec2, size: Vec2) -> bool {
     center.is_finite() && size.is_finite() && size.min_element() > 0.0
-}
-
-fn bounds_center(points: &[Vec2]) -> Vec2 {
-    let min = points
-        .iter()
-        .copied()
-        .fold(Vec2::splat(f32::INFINITY), Vec2::min);
-    let max = points
-        .iter()
-        .copied()
-        .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max);
-    (min + max) * 0.5
 }
 
 /// Master's rectangle contacts include interior segment endpoints. Corner
@@ -309,66 +202,6 @@ pub fn segment_rect_contacts(center: Vec2, size: Vec2, from: Vec2, to: Vec2) -> 
         }
     }
     hits
-}
-
-fn split_polygons(center: Vec2, size: Vec2, from: Vec2, to: Vec2) -> Vec<Vec<Vec2>> {
-    let hits = segment_rect_contacts(center, size, from, to);
-    if hits.len() != 2 {
-        return vec![];
-    }
-    let min = center - size * 0.5;
-    let max = center + size * 0.5;
-    let corners = [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)];
-    let mut outline = super::theme::corners::outline(center, size)[..104].to_vec();
-    outline.dedup_by(|a, b| a.distance_squared(*b) < 0.0001);
-    if let Some(inner) = hits
-        .into_iter()
-        .find(|p| p.cmpgt(min).all() && p.cmplt(max).all())
-    {
-        return (0..4)
-            .map(|i| {
-                let triangle = [corners[i], corners[(i + 1) % 4], inner];
-                let mut piece = outline.clone();
-                for j in 0..3 {
-                    piece = clip_side(&piece, triangle[j], triangle[(j + 1) % 3], 1.0);
-                }
-                piece
-            })
-            .filter(|p| p.len() >= 3)
-            .collect();
-    }
-    let mut polygons = Vec::new();
-    for sign in [-1.0, 1.0] {
-        let output = clip_side(&outline, from, to, sign);
-        if output.len() < 3 {
-            return vec![];
-        }
-        polygons.push(output);
-    }
-    polygons
-}
-
-fn clip_side(points: &[Vec2], from: Vec2, to: Vec2, sign: f32) -> Vec<Vec2> {
-    let mut output = Vec::new();
-    for i in 0..points.len() {
-        let a = points[i];
-        let b = points[(i + 1) % points.len()];
-        let da = (to - from).perp_dot(a - from) * sign;
-        let db = (to - from).perp_dot(b - from) * sign;
-        if da >= 0.0 {
-            output.push(a);
-        }
-        if (da >= 0.0) != (db >= 0.0) {
-            output.push(a.lerp(b, da / (da - db)));
-        }
-    }
-    output.dedup_by(|a, b| a.distance_squared(*b) < 0.0001);
-    if output.len() > 1
-        && output[0].distance_squared(*output.last().expect("nonempty polygon")) < 0.0001
-    {
-        output.pop();
-    }
-    output
 }
 
 pub fn install(app: &mut App) {
@@ -474,18 +307,6 @@ fn polyline(points: &[Vec2], closed: bool) -> Path {
         path.line_to(point(p.x, p.y));
     }
     path.end(closed);
-    path.build()
-}
-
-fn rectangle(center: Vec2, size: Vec2, radius: f32) -> Path {
-    let min = center - size * 0.5;
-    let max = center + size * 0.5;
-    let mut path = Path::builder();
-    path.add_rounded_rectangle(
-        &Box2D::new(point(min.x, min.y), point(max.x, max.y)),
-        &BorderRadii::new(radius),
-        Winding::Positive,
-    );
     path.build()
 }
 
@@ -614,14 +435,6 @@ fn preview_geometry(
     world_per_pixel: f32,
 ) -> Result<(), String> {
     let warning = Color::srgba_u8(243, 139, 168, 153);
-    for (center, size) in &preview.boxes {
-        paint(
-            buffers,
-            &polyline(&super::theme::corners::outline(*center, *size), true),
-            warning,
-            Some(1.5 * world_per_pixel),
-        )?;
-    }
     for (segments, _) in &preview.edges {
         // EdgePaths contains renderer-flattened segments. Join contiguous
         // segments once so alpha does not accumulate at every curve sample.
@@ -722,20 +535,6 @@ fn geometry(effects: &Effects, world_per_pixel: f32) -> Result<Mesh, String> {
                     Some(world_per_pixel),
                 )?;
             }
-            Shape::CreateFlash {
-                center,
-                size,
-                color,
-            } => {
-                let outline = super::theme::corners::outline(*center, *size);
-                let path = polyline(&outline, true);
-                paint(
-                    &mut buffers,
-                    &path,
-                    color.with_alpha(0.6 * alpha * alpha),
-                    Some(1.5 * world_per_pixel),
-                )?;
-            }
             Shape::Trail {
                 center,
                 size,
@@ -818,47 +617,6 @@ fn geometry(effects: &Effects, world_per_pixel: f32) -> Result<Mesh, String> {
                     ]);
                 }
             }
-            Shape::Shard {
-                polygon: points,
-                velocity,
-                fill,
-                border,
-            } => {
-                let offset = *velocity * n - Vec2::Y * (0.25 * n * n);
-                let points: Vec<_> = points.iter().map(|point| *point + offset).collect();
-                let path = polygon(&points);
-                paint(
-                    &mut buffers,
-                    &path,
-                    fill.with_alpha(fill.alpha() * alpha),
-                    None,
-                )?;
-                paint(
-                    &mut buffers,
-                    &path,
-                    border.with_alpha(alpha),
-                    Some(1.5 * world_per_pixel),
-                )?;
-            }
-            Shape::Dust { particles } => {
-                let color = if effects.light {
-                    Color::srgb_u8(114, 135, 253)
-                } else {
-                    Color::srgb_u8(180, 190, 254)
-                };
-                for (point, velocity, size) in particles {
-                    paint(
-                        &mut buffers,
-                        &rectangle(
-                            *point + *velocity * n,
-                            Vec2::splat(*size * world_per_pixel),
-                            0.0,
-                        ),
-                        color.with_alpha(alpha),
-                        None,
-                    )?;
-                }
-            }
         }
     }
     Ok(
@@ -882,9 +640,6 @@ fn geometry(effects: &Effects, world_per_pixel: f32) -> Result<Mesh, String> {
             .with_inserted_indices(Indices::U32(buffers.indices)),
     )
 }
-
-#[path = "creation_effects.rs"]
-mod creation;
 
 #[cfg(test)]
 #[path = "effects_tests.rs"]

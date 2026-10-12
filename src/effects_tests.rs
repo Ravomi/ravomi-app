@@ -1,6 +1,64 @@
 use super::*;
 
 #[test]
+fn cutting_a_node_emits_only_line_and_contact_feedback() {
+    use super::super::{Interaction, cutting, edges, editor, physics};
+    use project_graph_bevy_canvas::document::Document;
+
+    let mut doc = Document::blank().unwrap();
+    doc.create_text_node([0.0, 0.0]).unwrap();
+    let before = doc.nodes.clone();
+    let mut interaction = Interaction::default();
+    let mut physics = physics::PhysicsEditor::default();
+    let mut editor = editor::Editor::default();
+    let paths = edges::EdgePaths::default();
+    let mut effects = Effects::default();
+    let mut mouse = ButtonInput::default();
+    for (cursor, released) in [
+        (Vec2::new(-100.0, 0.0), false),
+        (Vec2::new(100.0, 0.0), true),
+    ] {
+        if released {
+            mouse.clear();
+            mouse.release(MouseButton::Right);
+        } else {
+            mouse.press(MouseButton::Right);
+        }
+        assert!(cutting::input(
+            &mouse,
+            &ButtonInput::default(),
+            cursor,
+            1.0,
+            &mut doc,
+            None,
+            &mut interaction,
+            &mut physics,
+            &mut editor,
+            &paths,
+            &mut effects,
+        ));
+    }
+    assert!(doc.nodes.is_empty());
+    assert!(effects.active());
+    assert!(
+        effects
+            .items
+            .iter()
+            .all(|effect| matches!(effect.shape, Shape::Cut { .. } | Shape::Contact { .. }))
+    );
+    effects.advance(0.1);
+    for scale in [0.25, 1.0, 4.0] {
+        let mesh = geometry(&effects, scale).unwrap();
+        let (positions, _) = vertices(&mesh);
+        assert!(positions.iter().all(|point| point[1].abs() <= 10.0 * scale));
+    }
+    effects.advance(0.16);
+    assert!(!effects.active());
+    doc.undo();
+    assert_eq!(doc.nodes, before);
+}
+
+#[test]
 fn editing_feedback_stays_on_the_node_edge_at_every_zoom() {
     for scale in [0.25, 1.0, 4.0] {
         let mut effects = Effects::default();
@@ -75,7 +133,6 @@ fn preview_uses_a_thin_catppuccin_line_at_all_zooms() {
         let mut effects = Effects::default();
         effects.cutting_preview(Some(CutPreview {
             line: [Vec2::ZERO, Vec2::new(400.0, 0.0)],
-            boxes: vec![],
             edges: vec![],
         }));
         assert!(
@@ -150,7 +207,7 @@ fn acute_blade_round_joins_cannot_extend_beyond_the_halo_radius() {
 
 #[test]
 #[ignore = "requires a GPU; captures actual production effects material at three zoom levels under results/effects-gpu-*.png"]
-fn gpu_blends_cut_halos_and_fading_debris_at_multiple_zooms() {
+fn gpu_blends_cut_halos_at_multiple_zooms() {
     use bevy::{
         camera::RenderTarget,
         render::{
@@ -263,7 +320,6 @@ fn gpu_blends_cut_halos_and_fading_debris_at_multiple_zooms() {
                 } else {
                     effects.cutting_preview(Some(CutPreview {
                         line: [from, to],
-                        boxes: vec![],
                         edges: vec![],
                     }));
                 }
@@ -302,65 +358,6 @@ fn gpu_blends_cut_halos_and_fading_debris_at_multiple_zooms() {
         }
     }
 
-    if let Projection::Orthographic(projection) =
-        &mut *app.world_mut().get_mut::<Projection>(camera).unwrap()
-    {
-        projection.scale = 1.0;
-    }
-    for light in [false, true] {
-        let mut effects = app.world_mut().resource_mut::<Effects>();
-        effects.clear();
-        effects.light = light;
-        effects.create_node(Vec2::ZERO, Vec2::new(60.0, 76.0));
-        app.update();
-        app.update();
-        let image = capture(&mut app, &target, deadline, true);
-        image
-            .save(format!("results/creation-outline-{light}.png"))
-            .unwrap();
-        for (x, y, pixel) in image.enumerate_pixels() {
-            if !(224..=288).contains(&x) || !(24..=104).contains(&y) {
-                assert_eq!(
-                    pixel.0,
-                    [0, 0, 0],
-                    "creation glow escaped bounds at {x},{y}"
-                );
-            }
-        }
-        assert_eq!(image.get_pixel(256, 64).0, [0, 0, 0]);
-    }
-    {
-        let mut effects = app.world_mut().resource_mut::<Effects>();
-        effects.clear();
-        // At frame 25, gravity has displaced a shard by -162.5 world units.
-        // Offset the input polygon so its half-transparent center is visible.
-        effects.push(
-            50.0,
-            Shape::Shard {
-                polygon: vec![
-                    Vec2::new(-30.0, 142.5),
-                    Vec2::new(30.0, 142.5),
-                    Vec2::new(30.0, 182.5),
-                    Vec2::new(-30.0, 182.5),
-                ],
-                velocity: Vec2::ZERO,
-                fill: Color::WHITE,
-                border: Color::WHITE,
-            },
-        );
-        effects.advance(25.0 / FPS);
-    }
-    app.update();
-    app.update();
-    let image = capture(&mut app, &target, deadline, true);
-    image
-        .save("results/effects-gpu-half-faded-debris.png")
-        .unwrap();
-    let center = image.get_pixel(256, 64).0;
-    assert!(
-        center.iter().all(|&v| (150..=220).contains(&v)),
-        "half-alpha debris should blend over black, got {center:?}"
-    );
     app.world_mut().resource_mut::<Effects>().clear();
     app.update();
     app.update();
@@ -372,26 +369,21 @@ fn gpu_blends_cut_halos_and_fading_debris_at_multiple_zooms() {
 }
 
 #[test]
-fn warning_follows_the_node_outline_with_constant_screen_width() {
+fn cutting_preview_stays_on_the_cut_line_at_every_zoom() {
     for scale in [0.1, 0.5, 1.0, 2.0, 20.0] {
         let preview = CutPreview {
             line: [Vec2::new(1000.0, 0.0); 2],
-            boxes: vec![(Vec2::ZERO, Vec2::splat(100.0))],
             edges: vec![],
         };
         let mut effects = Effects::default();
         effects.cutting_preview(Some(preview));
         let mesh = geometry(&effects, scale).unwrap();
-        let (positions, colors) = vertices(&mesh);
-        let max = positions
-            .iter()
-            .zip(colors)
-            .filter(|(_, c)| (c[3] - 0.6).abs() < 0.001)
-            .map(|(p, _)| p[1].abs())
-            .fold(0.0, f32::max);
+        let (positions, _) = vertices(&mesh);
+        assert!(!positions.is_empty());
         assert!(
-            (max - (50.0 + 0.75 * scale)).abs() < 0.01,
-            "warning bounds: max={max}, scale={scale}",
+            positions
+                .iter()
+                .all(|p| (p[0] - 1000.0).abs() <= 5.0 * scale && p[1].abs() <= 5.0 * scale)
         );
     }
 }
@@ -414,19 +406,10 @@ fn export_cutting_visual_reference() {
             let mut effects = Effects::default();
             if released {
                 effects.cut_line(from, to);
-                effects.split(
-                    Vec2::new(450.0 * scale, y),
-                    Vec2::new(240.0, 80.0) * scale,
-                    from,
-                    to,
-                    Color::NONE,
-                    Color::srgb_u8(88, 91, 112),
-                );
                 effects.advance(0.1);
             } else {
                 effects.cutting_preview(Some(CutPreview {
                     line: [from, to],
-                    boxes: vec![(Vec2::new(450.0 * scale, y), Vec2::new(240.0, 80.0) * scale)],
                     edges: vec![],
                 }));
             }
@@ -534,103 +517,18 @@ fn edit_zoom_gating_and_capacity_bound() {
     assert!(!effects.active());
 }
 
-fn area(p: &[Vec2]) -> f32 {
-    (0..p.len())
-        .map(|i| p[i].perp_dot(p[(i + 1) % p.len()]))
-        .sum::<f32>()
-        .abs()
-        * 0.5
-}
-
 #[test]
-fn split_uses_clipped_pieces_and_preserves_area() {
-    for (from, to, count) in [
-        (Vec2::new(-60.0, 0.0), Vec2::new(60.0, 0.0), 2),
-        (Vec2::new(-60.0, -60.0), Vec2::new(60.0, 60.0), 2),
-        (Vec2::new(-60.0, 35.0), Vec2::new(35.0, 60.0), 2),
-        (Vec2::ZERO, Vec2::new(60.0, 0.0), 4),
-    ] {
-        let p = split_polygons(Vec2::ZERO, Vec2::splat(100.0), from, to);
-        assert_eq!(p.len(), count);
-        let expected = area(&super::super::theme::corners::outline(
-            Vec2::ZERO,
-            Vec2::splat(100.0),
-        ));
-        assert!((p.iter().map(|p| area(p)).sum::<f32>() - expected).abs() < 0.1);
-        assert!(p.iter().all(|p| (3..=110).contains(&p.len())));
-    }
-    assert!(
-        split_polygons(
-            Vec2::ZERO,
-            Vec2::splat(100.0),
-            Vec2::new(70.0, 70.0),
-            Vec2::new(90.0, 90.0)
-        )
-        .is_empty()
-    );
-}
-
-#[test]
-fn all_effect_shapes_tessellate_and_split_expires() {
+fn all_effect_shapes_tessellate_and_expire() {
     let mut effects = Effects::default();
     effects.begin_edit(Vec2::ZERO, Vec2::splat(100.0), true);
     effects.move_trail(0, Vec2::ZERO, Vec2::splat(100.0), Vec2::X * 10.0);
     effects.cut_line(Vec2::new(-60.0, 0.0), Vec2::new(60.0, 0.0));
-    effects.split(
-        Vec2::ZERO,
-        Vec2::splat(100.0),
-        Vec2::new(-60.0, 0.0),
-        Vec2::new(60.0, 0.0),
-        Color::WHITE,
-        Color::BLACK,
-    );
     effects.advance(0.1);
     effects.cut_contact(Vec2::ZERO);
     let mesh = geometry(&effects, 1.0).unwrap();
     assert!(mesh.count_vertices() > 0);
     effects.advance(50.0 / FPS);
     assert!(!effects.active());
-}
-
-#[test]
-fn rounded_shards_separate_across_horizontal_vertical_and_diagonal_cuts() {
-    for direction in [Vec2::X, Vec2::Y, Vec2::ONE.normalize()] {
-        let mut effects = Effects::default();
-        effects.split(
-            Vec2::ZERO,
-            Vec2::splat(100.0),
-            -direction * 100.0,
-            direction * 100.0,
-            Color::NONE,
-            Color::WHITE,
-        );
-        let mut velocities = [Vec2::ZERO; 2];
-        let mut count = 0;
-        for effect in &effects.items {
-            match &effect.shape {
-                Shape::Shard {
-                    polygon, velocity, ..
-                } => {
-                    let center = polygon.iter().copied().sum::<Vec2>() / polygon.len() as f32;
-                    velocities[usize::from(direction.perp_dot(center) > 0.0)] = *velocity;
-                    count += 1;
-                }
-                Shape::Dust { particles } => assert_eq!(particles.len(), 30),
-                _ => panic!("unexpected split effect"),
-            }
-        }
-        assert_eq!(count, 2);
-        assert!((velocities[1] - velocities[0]).dot(direction.perp()) > 0.0);
-        effects.advance(30.0 / FPS);
-        assert!(
-            effects
-                .items
-                .iter()
-                .all(|effect| matches!(effect.shape, Shape::Shard { .. }))
-        );
-        effects.advance(20.0 / FPS);
-        assert!(!effects.active());
-    }
 }
 
 #[test]

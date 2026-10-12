@@ -170,7 +170,7 @@ fn empty_canvas_double_click_creates_selects_and_undoes_one_node_without_draggin
     assert!(interaction.moving.is_empty());
     assert!(interaction.drag_start.is_none());
     assert!(!interaction.selecting);
-    assert!(app.world().resource::<effects::Effects>().active());
+    assert!(!app.world().resource::<effects::Effects>().active());
     assert!(
         app.world()
             .resource::<editor::Editor>()

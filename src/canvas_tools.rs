@@ -575,7 +575,7 @@ pub fn execute(
     interaction: &mut Interaction,
     editor: &mut editor::Editor,
     physics: &mut physics::PhysicsEditor,
-    effects: &mut effects::Effects,
+    _effects: &mut effects::Effects,
 ) -> Result<()> {
     doc.selection = project_graph_bevy_canvas::document::Selection::capture(
         doc,
@@ -587,7 +587,7 @@ pub fn execute(
     interaction.cutting.cancel();
     interaction.jump.stop(doc);
     match command {
-        Command::NewNode => creation::create(point, doc, interaction, editor, physics, effects),
+        Command::NewNode => creation::create(point, doc, interaction, editor, physics),
         Command::Copy => {
             editor.clipboard.copy(doc, &interaction.selected)?;
             editor.clipboard_copy_text = Some("Ravomi 节点（在 Ravomi 中粘贴）".into());

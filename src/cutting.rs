@@ -184,10 +184,6 @@ pub fn input(
     if mouse.just_released(MouseButton::Right) {
         let nodes = interaction.cutting.nodes.clone();
         let edges = interaction.cutting.edges.clone();
-        let pieces: Vec<_> = nodes
-            .iter()
-            .filter_map(|&i| sections::node(display, doc, i).cloned())
-            .collect();
         doc.selection = project_graph_bevy_canvas::document::Selection::capture(
             doc,
             &interaction.selected,
@@ -195,23 +191,6 @@ pub fn input(
         );
         match doc.delete_objects(&nodes, &edges) {
             Ok(()) => {
-                let palette = theme::palette(editor.light);
-                for node in pieces {
-                    if hits_node(&node, from, cursor) {
-                        effects.split(
-                            center(&node),
-                            Vec2::new(node.rect[2], node.rect[3]),
-                            from,
-                            cursor,
-                            if node.color[3] > 0.0 {
-                                color(node.color)
-                            } else {
-                                Color::NONE
-                            },
-                            palette.border,
-                        );
-                    }
-                }
                 effects.cut_line(from, cursor);
                 interaction.selected.clear();
                 interaction.last_click = None;
@@ -230,7 +209,7 @@ pub fn input(
 pub fn preview(
     gesture: &Gesture,
     doc: &Document,
-    display: Option<&sections::Display>,
+    _display: Option<&sections::Display>,
     paths: &edges::EdgePaths,
     effects: &mut effects::Effects,
 ) {
@@ -240,16 +219,8 @@ pub fn preview(
     };
     let mut preview = effects::CutPreview {
         line: [from, to],
-        boxes: vec![],
         edges: vec![],
     };
-    for &i in &gesture.nodes {
-        if let Some(n) = sections::node(display, doc, i) {
-            preview
-                .boxes
-                .push((center(n), Vec2::new(n.rect[2], n.rect[3])));
-        }
-    }
     for &i in &gesture.edges {
         if let Some(edge) = doc.edges.get(i)
             && let Some(path) = paths.0.get(&edge.id)

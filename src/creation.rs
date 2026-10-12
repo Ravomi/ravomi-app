@@ -60,7 +60,6 @@ pub fn create(
     interaction: &mut Interaction,
     editor: &mut editor::Editor,
     physics: &mut physics::PhysicsEditor,
-    effects: &mut effects::Effects,
 ) {
     doc.selection = project_graph_bevy_canvas::document::Selection::capture(
         doc,
@@ -71,8 +70,6 @@ pub fn create(
     match doc.create_text_node([cursor.x, -cursor.y]) {
         Ok(index) => {
             let node = &doc.nodes[index];
-            let size = Vec2::new(node.rect[2], node.rect[3]);
-            effects.create_node(center(node), size);
             interaction.selected = HashSet::from([index]);
             interaction.selected_edges.clear();
             interaction.selection_revision = doc.revision;

@@ -1532,14 +1532,7 @@ fn input(
             create_allowed
                 && !cutting::occupied(&scene.0, display.as_deref(), &paths, p, projection.scale),
         ) {
-            creation::create(
-                p,
-                &mut scene.0,
-                &mut interaction,
-                &mut editor,
-                &mut physics,
-                &mut effects,
-            );
+            creation::create(p, &mut scene.0, &mut interaction, &mut editor, &mut physics);
         }
     }
     interaction.last_cursor = Some(p);
