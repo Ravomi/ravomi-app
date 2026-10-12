@@ -42,7 +42,7 @@ mod tests {
         assert_eq!(doc.nodes.len(), 1);
         assert!(!doc.set_nodes_locked(&selected, true).unwrap());
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("locked.prg");
+        let path = dir.path().join("locked.mio");
         doc.save(&path).unwrap();
         assert!(Document::open(&path).unwrap().nodes[0].locked);
         doc.undo();

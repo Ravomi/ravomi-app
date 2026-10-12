@@ -273,7 +273,7 @@ mod tests {
         assert!(target.nodes[group].collapsed);
         assert!(!target.section_overview_allowed(&target.nodes[group].id));
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("copied.prg");
+        let path = dir.path().join("copied.mio");
         target.save(&path).unwrap();
         assert!(same_nodes(
             &target.nodes,
@@ -311,7 +311,7 @@ mod tests {
         let inner = doc.create_group(&HashSet::from([1, 2])).unwrap();
         let outer = doc.create_group(&HashSet::from([inner])).unwrap();
         let dir = tempfile::tempdir().unwrap();
-        let source = dir.path().join("source.prg");
+        let source = dir.path().join("source.mio");
         doc.save(&source).unwrap();
         let original_bytes = fs::read(&source).unwrap();
         doc.selection = Selection::capture(&doc, &HashSet::from([outer]), &HashSet::new());
@@ -329,7 +329,7 @@ mod tests {
         assert_eq!(snapshot.nodes[1], nodes[2]);
         assert_eq!(snapshot.attachments.len(), 1);
         assert_eq!(snapshot.attachments["selected.png"], [1, 2, 3]);
-        let output = dir.path().join("selection.prg");
+        let output = dir.path().join("selection.mio");
         snapshot.save_snapshot(&output).unwrap();
         let reopened = Document::open(&output).unwrap();
         assert!(same_nodes(&snapshot.nodes, &reopened.nodes));
@@ -428,7 +428,7 @@ mod tests {
         assert_ne!(name, "source.png");
         assert_eq!(target.attachments[name], [1, 2, 3]);
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("attachments.prg");
+        let path = dir.path().join("attachments.mio");
         target.save(&path).unwrap();
         let reopened = Document::open(&path).unwrap();
         assert!(same_nodes(&target.nodes, &reopened.nodes));
@@ -473,7 +473,7 @@ mod tests {
         assert_eq!(target.nodes.len(), 3);
         target.redo();
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("paste.prg");
+        let path = dir.path().join("paste.mio");
         target.save(&path).unwrap();
         let reopened = Document::open(&path).unwrap();
         assert!(same_nodes(&target.nodes, &reopened.nodes));

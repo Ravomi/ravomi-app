@@ -1,10 +1,7 @@
 use crate::{
     Result,
     document::Document,
-    storage::{
-        self, LEGACY_RECOVERY_DOCUMENT_NAME, RECOVERY_DOCUMENT_NAME, RECOVERY_ENTRY_NAME,
-        RECOVERY_SETTINGS_NAME,
-    },
+    storage::{self, RECOVERY_DOCUMENT_NAME, RECOVERY_ENTRY_NAME, RECOVERY_SETTINGS_NAME},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -129,9 +126,9 @@ pub fn root() -> Result<PathBuf> {
     storage::recovery_root().ok_or_else(|| "无法确定恢复副本目录".into())
 }
 
-/// Prefer the native snapshot; legacy PRG generations remain recoverable.
+/// Only native project snapshots are recoverable.
 pub fn document_path(generation: &Path) -> Result<PathBuf> {
-    for name in [RECOVERY_DOCUMENT_NAME, LEGACY_RECOVERY_DOCUMENT_NAME] {
+    for name in [RECOVERY_DOCUMENT_NAME] {
         let path = generation.join(name);
         match fs::metadata(&path) {
             Ok(metadata) if metadata.is_file() => return Ok(path),
@@ -182,7 +179,7 @@ pub fn remove(root: &Path, generation: &Path) -> Result<()> {
         let item = item?;
         if !matches!(
             item.file_name().to_str(),
-            Some(RECOVERY_DOCUMENT_NAME | LEGACY_RECOVERY_DOCUMENT_NAME | RECOVERY_ENTRY_NAME)
+            Some(RECOVERY_DOCUMENT_NAME | RECOVERY_ENTRY_NAME)
         ) || !item.file_type()?.is_file()
         {
             return Err("副本目录包含额外内容，未执行删除".into());
@@ -254,26 +251,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_generations_take_precedence_and_legacy_generations_still_restore() {
+    fn legacy_generations_are_rejected_and_preserved() {
         let root = tempfile::tempdir().unwrap();
         let tab = root.path().join(uuid::Uuid::new_v4().to_string()).join("1");
         let mut document = Document::blank().unwrap();
         document.create_text_node([0.0; 2]).unwrap();
         let generation = write(&document, &tab).unwrap();
         let native = generation.join(RECOVERY_DOCUMENT_NAME);
-        let legacy = generation.join(LEGACY_RECOVERY_DOCUMENT_NAME);
-        document.save_snapshot(&legacy).unwrap();
+        let legacy = generation.join("document.prg");
+        fs::copy(&native, &legacy).unwrap();
         assert_eq!(document_path(&generation).unwrap(), native);
         fs::remove_file(native).unwrap();
-        assert_eq!(document_path(&generation).unwrap(), legacy);
-        assert_eq!(discover(root.path()).unwrap().entries.len(), 1);
-        assert_eq!(list(&tab).unwrap().len(), 1);
-        let restored = Document::open_recovery(&legacy).unwrap();
-        assert_eq!(restored.nodes.len(), 1);
-        assert!(restored.path.is_none());
-        assert!(restored.dirty());
-        remove(root.path(), &generation).unwrap();
-        assert!(!generation.exists());
+        assert!(document_path(&generation).is_err());
+        assert!(discover(root.path()).unwrap().entries.is_empty());
+        assert!(list(&tab).is_err());
+        assert!(Document::open_recovery(&legacy).is_err());
+        assert!(remove(root.path(), &generation).is_err());
+        assert!(legacy.exists());
     }
 
     #[test]
@@ -372,7 +366,7 @@ mod tests {
         restored.create_text_node([100.0; 2]).unwrap();
         restored.undo();
         assert!(restored.dirty());
-        restored.save(&root.path().join("restored.prg")).unwrap();
+        restored.save(&root.path().join("restored.mio")).unwrap();
         assert!(!restored.dirty());
         assert_eq!(restored.nodes.len(), 1);
         assert_eq!(fs::read(source).unwrap(), bytes);

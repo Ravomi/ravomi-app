@@ -2,7 +2,7 @@
 set -euo pipefail
 prototype_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 binary="$prototype_dir/target/release/project-graph-bevy-canvas"
-fixture="$prototype_dir/fixtures/tutorial-shortcut-keys-3.1-original.prg"
+fixture="$prototype_dir/fixtures/tutorial-shortcut-keys.mio"
 result_dir="${1:-$prototype_dir/results/suite}"
 backend="${2:-wayland}"
 case "$backend" in

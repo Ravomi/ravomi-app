@@ -88,14 +88,14 @@ def main():
                 screenshot.parent.mkdir(parents=True, exist_ok=True)
                 screenshot.write_bytes(base64.b64decode(request("GET", prefix + "/screenshot")))
             with tempfile.TemporaryDirectory(prefix="hm-native-smoke-") as directory:
-                path = str(Path(directory) / "中文.prg")
+                path = str(Path(directory) / "中文.mio")
                 saved = invoke("session_execute", {"command": {"type": "save", "path": path}})
                 assert not saved["dirty"] and Path(path).is_file()
                 invoke("session_execute", {"command": {"type": "new", "discard": False}})
                 reopened = invoke("session_execute", {"command": {"type": "open", "path": path, "discard": False}})
                 assert reopened["nodes"][0]["text"] == "真实原生 IPC 中文"
             assert not script("return !!document.querySelector('[role=alert]')")
-            print("PASS: native React interaction → Tauri IPC → Rust edit/save/reopen (temporary PRG)")
+            print("PASS: native React interaction → Tauri IPC → Rust edit/save/reopen (temporary MIO)")
         finally:
             try:
                 if session:

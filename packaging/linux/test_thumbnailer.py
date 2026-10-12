@@ -4,7 +4,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import struct
 import subprocess
 import tempfile
 import unittest
@@ -207,67 +206,54 @@ class ThumbnailTests(unittest.TestCase):
                         thumbnailer.render(str(source), str(output), 128)
                     self.assertEqual(output.read_bytes(), b"previous preview")
 
-    def native_document(self, directory, graph):
-        source = Path(directory, "native.prg")
-        blocks = {}
-        data = bytearray(b"\0" * 32)
-        for name, kind, payload in (
-            ("records", "variant", b"not-decoded-by-thumbnailer"),
-            ("preview", "json", json.dumps(graph).encode()),
-        ):
-            blocks[name] = {
-                "offset": len(data),
-                "length": len(payload),
-                "kind": kind,
-                "sha256": hashlib.sha256(payload).hexdigest(),
-            }
-            data.extend(payload)
-        manifest = json.dumps(
-            {"version": 4, "codec": "godot-variant-4", "blocks": blocks}
-        ).encode()
-        data[:32] = struct.pack(
-            "<8sIIQQ", thumbnailer.NATIVE_MAGIC, 4, len(manifest), len(data), 0
-        )
-        data.extend(manifest)
-        source.write_bytes(data)
-        return source, blocks
+    def write_mio(self, source, stage):
+        import msgpack
 
-    def test_native_preview_does_not_decode_records(self):
-        graph = {"objects": [self.node("a", "Native preview", x=20, y=30)]}
-        with tempfile.TemporaryDirectory() as directory:
-            source, _ = self.native_document(directory, graph)
-            loaded, assets = thumbnailer.native_preview(str(source))
-            self.assertEqual(loaded, graph)
-            self.assertEqual(assets, {})
-            output = Path(directory, "native.png")
-            with patch.object(thumbnailer, "prefers_light_theme", return_value=False):
-                thumbnailer.render(str(source), str(output), 256)
-            image = cairo.ImageSurface.create_from_png(str(output))
-            self.assertEqual((image.get_width(), image.get_height()), (512, 512))
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr(
+                "manifest.json",
+                json.dumps(
+                    {
+                        "format": "ravomi-project",
+                        "schemaVersion": 1,
+                        "canvasSchemaVersion": 1,
+                        "requiredFeatures": [],
+                        "projectId": "90d4ef64-087e-476b-8a2a-dfd03f1b9e59",
+                    }
+                ),
+            )
+            archive.writestr("canvas/stage.msgpack", msgpack.packb(stage))
 
-    def test_native_preview_rejects_checksum_damage(self):
+    def test_legacy_content_is_rejected_even_with_mio_extension(self):
         with tempfile.TemporaryDirectory() as directory:
-            source, blocks = self.native_document(directory, {"objects": []})
-            data = bytearray(source.read_bytes())
-            data[blocks["preview"]["offset"]] ^= 1
-            source.write_bytes(data)
-            with self.assertRaisesRegex(ValueError, "Damaged PRG preview block"):
-                thumbnailer.native_preview(str(source))
-
-    def test_native_preview_rejects_truncated_directory(self):
-        with tempfile.TemporaryDirectory() as directory:
-            source, _ = self.native_document(directory, {"objects": []})
-            source.write_bytes(source.read_bytes()[:-1])
-            with self.assertRaisesRegex(ValueError, "Invalid PRG directory"):
-                thumbnailer.native_preview(str(source))
+            source = Path(directory, "legacy.mio")
+            output = Path(directory, "preview.png")
+            for entry in ("stage.msgpack", "stage.json", "thumbnail.png"):
+                with zipfile.ZipFile(source, "w") as archive:
+                    archive.writestr(entry, b"legacy")
+                before = source.read_bytes()
+                output.write_bytes(b"keep preview")
+                with self.assertRaisesRegex(ValueError, "legacy PRG"):
+                    thumbnailer.render(source, output, 64)
+                self.assertEqual(source.read_bytes(), before)
+                self.assertEqual(output.read_bytes(), b"keep preview")
+            source.write_bytes(b"PGDOC4\r\n" + bytes(32))
+            with self.assertRaises(zipfile.BadZipFile):
+                thumbnailer.render(source, output, 64)
 
     def render_graph(self, objects, light=False):
         with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory, "graph.prg")
+            source = Path(directory, "graph.mio")
             output = Path(directory, "graph.png")
-            with zipfile.ZipFile(source, "w") as archive:
-                archive.writestr("stage.json", json.dumps({"objects": objects}))
-            with patch.object(thumbnailer, "prefers_light_theme", return_value=light):
+            source.write_bytes(thumbnailer.SQLITE_MAGIC)
+            with (
+                patch.object(
+                    thumbnailer,
+                    "sqlite_preview",
+                    return_value=({"objects": objects}, {}),
+                ),
+                patch.object(thumbnailer, "prefers_light_theme", return_value=light),
+            ):
                 thumbnailer.render(str(source), str(output), 256)
             return output.read_bytes()
 
@@ -442,16 +428,16 @@ class ThumbnailTests(unittest.TestCase):
         self.assertEqual(graph["objects"][0]["properties"]["container"], {"$ref": "b"})
         self.assertEqual(graph["objects"][2]["properties"]["target"], {"$ref": "a"})
         with tempfile.TemporaryDirectory() as directory:
-            import msgpack
-
-            source, output = Path(directory, "old.prg"), Path(directory, "old.png")
-            with zipfile.ZipFile(source, "w") as archive:
-                archive.writestr("stage.msgpack", msgpack.packb(stage))
+            source, output = (
+                Path(directory, "project.mio"),
+                Path(directory, "preview.png"),
+            )
+            self.write_mio(source, stage)
             thumbnailer.render(str(source), str(output), 128)
             surface = cairo.ImageSurface.create_from_png(str(output))
             self.assertEqual(surface.get_width(), 256)
 
-    def test_embedded_preview_is_used_when_no_stage_is_available(self):
+    def test_prg_with_only_embedded_preview_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             source, output = Path(directory, "old.prg"), Path(directory, "old.png")
             import io
@@ -464,19 +450,16 @@ class ThumbnailTests(unittest.TestCase):
             original.write_to_png(png)
             with zipfile.ZipFile(source, "w") as archive:
                 archive.writestr("thumbnail.png", png.getvalue())
-            thumbnailer.render(str(source), str(output), 256)
-            self.assertEqual(
-                self.pixels(output.read_bytes())[256 * 512 + 256], (255, 0, 0)
-            )
+            with self.assertRaisesRegex(ValueError, "Only .mio"):
+                thumbnailer.render(str(source), str(output), 256)
+            self.assertFalse(output.exists())
 
     def test_saved_stage_takes_precedence_over_stale_embedded_preview(self):
         import io
 
-        import msgpack
-
         with tempfile.TemporaryDirectory() as directory:
             source, output = (
-                Path(directory, "edited.prg"),
+                Path(directory, "edited.mio"),
                 Path(directory, "edited.png"),
             )
             original = cairo.ImageSurface(cairo.FORMAT_ARGB32, 40, 40)
@@ -503,8 +486,8 @@ class ThumbnailTests(unittest.TestCase):
                         },
                     }
                 ]
-                with zipfile.ZipFile(source, "w") as archive:
-                    archive.writestr("stage.msgpack", msgpack.packb(stage))
+                self.write_mio(source, stage)
+                with zipfile.ZipFile(source, "a") as archive:
                     archive.writestr("thumbnail.png", png.getvalue())
                 before = source.read_bytes()
                 with patch.object(
@@ -577,29 +560,24 @@ class ThumbnailTests(unittest.TestCase):
                 set(section["MimeType"].strip(";").split(";")),
                 {
                     "application/x-ravomi",
-                    "application/vnd.project-graph",
-                    "application/x-project-graph",
                 },
             )
             mime = root / "usr/share/mime"
             subprocess.run(
                 ["update-mime-database", str(mime)], check=True, capture_output=True
             )
-            self.assertIn(
+            self.assertNotIn(
                 "application/x-project-graph application/vnd.project-graph",
                 (mime / "aliases").read_text(),
             )
-            self.assertIn(
+            self.assertNotIn(
                 "80:application/vnd.project-graph:*.prg", (mime / "globs2").read_text()
             )
             self.assertIn(
                 "80:application/x-ravomi:*.mio", (mime / "globs2").read_text()
             )
-            source, output = root / "中文 空格.prg", root / "preview.png"
-            with zipfile.ZipFile(source, "w") as archive:
-                archive.writestr(
-                    "stage.json", json.dumps({"objects": [self.node("a", "中文预览")]})
-                )
+            source, output = root / "中文 空格.mio", root / "preview.png"
+            self.write_mio(source, [{"_": "TextNode", "uuid": "a", "text": "中文预览"}])
             subprocess.run(
                 [str(helper), str(source), str(output), "128"],
                 check=True,
@@ -723,9 +701,7 @@ class ThumbnailTests(unittest.TestCase):
         self.assertEqual(len(set(outputs)), len(variants))
 
     def test_real_tutorial_renders_without_changing_source(self):
-        source = (
-            MODULE_PATH.parents[2] / "fixtures/tutorial-shortcut-keys-3.1-original.prg"
-        )
+        source = MODULE_PATH.parents[2] / "fixtures/tutorial-shortcut-keys.mio"
         if not source.is_file():
             self.skipTest("Optional local tutorial fixture is not distributed")
         before = hashlib.sha256(source.read_bytes()).digest()
@@ -800,11 +776,15 @@ class ThumbnailTests(unittest.TestCase):
                 "properties": {"source": {"$ref": "outer"}, "target": {"$ref": "leaf"}},
             }
         )
-        source = Path(directory, name + ".prg")
+        source = Path(directory, name + ".mio")
         output = Path(directory, name + ".png")
-        with zipfile.ZipFile(source, "w") as archive:
-            archive.writestr("stage.json", json.dumps({"objects": objects}))
-        with patch.object(thumbnailer, "prefers_light_theme", return_value=False):
+        source.write_bytes(thumbnailer.SQLITE_MAGIC)
+        with (
+            patch.object(
+                thumbnailer, "sqlite_preview", return_value=({"objects": objects}, {})
+            ),
+            patch.object(thumbnailer, "prefers_light_theme", return_value=False),
+        ):
             thumbnailer.render(str(source), str(output), 256)
         return output
 

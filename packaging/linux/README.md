@@ -1,6 +1,6 @@
 # Ravomi Linux 安装与文档缩略图
 
-本目录提供 Bevy 原生画布及内置 Pi 代码协作引擎的安装入口，以及 `.mio` 项目和 `.prg` 兼容画布的离线预览；不包含完整 React/Tauri 发布。产品与阶段状态见 [README](../../README.md)、[PRD](../../PRD.md)；React/Tauri 入口见 [app/README](../../app/README.md)。
+本目录提供 Bevy 原生画布及内置 Pi 代码协作引擎的安装入口，以及 `.mio` 项目的离线预览；不包含完整 React/Tauri 发布。产品与阶段状态见 [README](../../README.md)、[PRD](../../PRD.md)；React/Tauri 入口见 [app/README](../../app/README.md)。
 
 品牌显示与资源替换遵循 [BRAND](../../assets/branding/BRAND.md)，UI/UX 及 AI 实现规则见 [DESIGN](../../DESIGN.md)、[AI_UI_RULES](../../AI_UI_RULES.md)。发布前单独验收桌面图标的小尺寸识别、窗口文字与清晰度；现有兼容图标和旧式缩略图不会因规范更新自动符合新设计。保留既有程序 ID、用户数据路径和 MIME 的兼容性。
 
@@ -14,17 +14,17 @@ npm --prefix app run build:agent
 bash packaging/linux/install-app.sh
 ```
 
-需要 `desktop-file-utils` 和 `shared-mime-info`。安装后在应用菜单搜索 Ravomi。为兼容已有安装，程序路径暂保留 `~/.local/bin/graplu`，启动项 ID 与旧图标资源保留在 `${XDG_DATA_HOME:-~/.local/share}`，后续由统一打包配置迁移。安装会注册 `.mio` 与兼容 `.prg` 类型，不需要 sudo，不更改默认打开应用。安装脚本也接受已编译二进制的路径作为第一个参数。
+需要 `desktop-file-utils` 和 `shared-mime-info`。安装后在应用菜单搜索 Ravomi。为兼容已有安装，程序路径暂保留 `~/.local/bin/graplu`，启动项 ID 与旧图标资源保留在 `${XDG_DATA_HOME:-~/.local/share}`，后续由统一打包配置迁移。安装仅注册 `.mio` 类型，不需要 sudo，不更改默认打开应用；更新时替换本工具的旧 MIME 配置。安装脚本也接受已编译二进制的路径作为第一个参数。
 
 安装入口始终启动完整原生画布。Pi 可执行文件放在 `~/.local/bin/ravomi-agent`，随附许可与引擎锁文件放在用户数据目录 `ravomi/engine/`；不依赖外部全局 Pi。可将引擎二进制路径作为安装脚本的第二个参数。引擎构建环境与版本见 [agent-engine](../../app/agent-engine/README.md)。原生协作使用方法见 [画布协作验收](../../validation/canvas-ai-workflows.md)。
 
 ## Linux 文件管理器缩略图
 
-为 `.mio` 和 `.prg` 文件生成离线 PNG 预览，复用并维护 Godot 版的 Python/Cairo/Pango 工具。不启动 Bevy/Godot，不执行文档代码，不修改源文件；这不是画布内的节点或分组缩略图。
+为 `.mio` 文件生成离线 PNG 预览，复用并维护 Godot 版的 Python/Cairo/Pango 工具。不启动 Bevy/Godot，不执行文档代码，不修改源文件；这不是画布内的节点或分组缩略图。
 
-支持 Ravomi `.mio` SQLite v3 的画布记录和附件，并兼容 ZIP v1/v2 的 `manifest.json`、`canvas/stage.msgpack` 和 `assets/`；校验版本与必需能力，SQLite 内容校验 SHA-256，在只读事务中生成预览，不读取或执行协作历史。Linux MIME 为 `application/x-ravomi`，保留 `.prg` 的 `application/vnd.project-graph` 及别名。
+支持 Ravomi `.mio` SQLite v3 的画布记录和附件，并兼容 ZIP v1/v2 的 `manifest.json`、`canvas/stage.msgpack` 和 `assets/`；校验版本与必需能力，SQLite 内容校验 SHA-256，在只读事务中生成预览，不读取或执行协作历史。Linux MIME 为 `application/x-ravomi`。
 
-兼容预览 Bevy/master 的 ZIP `stage.msgpack`、Godot 的 ZIP `stage.json`、原生 `PGDOC4` JSON 预览块，以及仅含 `thumbnail.png` 的旧文件。PGDOC4 会校验块范围及 SHA-256，不解码 Godot Variant 记录。缩略图支持范围不等同于编辑器支持导入的格式；编辑器当前只支持 `.mio` 与 ZIP + MessagePack `.prg`。
+不再预览 PRG 的 ZIP `stage.msgpack`、`stage.json`、`PGDOC4` 或仅含 `thumbnail.png` 的旧文件，改为 `.mio` 后缀也不会开启兼容。
 
 Bevy 保存编辑后可能保留旧 `thumbnail.png`；本工具优先读取当前 stage。损坏的 stage 会报错，不回退到可能过期的图片。PNG 以临时文件原子替换，失败时保留已有输出；拒绝将源文件或其硬链接作为输出。
 
@@ -53,7 +53,7 @@ python3 -m pip install --require-hashes --no-binary=msgpack -r requirements-thum
 以下命令从本目录运行。直接生成图片：
 
 ```sh
-COLOR_SCHEME=dark /usr/bin/python3 project-graph-thumbnailer.py '/path/中文 文档.prg' /tmp/project-graph-preview.png 256
+COLOR_SCHEME=dark /usr/bin/python3 project-graph-thumbnailer.py '/path/中文 项目.mio' /tmp/project-graph-preview.png 256
 ```
 
 参数依次为输入、输出 PNG、请求尺寸，第四个可选参数是矩形预览高度。为高密度屏幕输出请求尺寸的两倍，边长限制为 64–2048 像素。可设 `COLOR_SCHEME=light`，无主题信息时使用深色。

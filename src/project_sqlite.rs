@@ -799,9 +799,9 @@ mod tests {
         let mut doc = Document::blank().unwrap();
         doc.create_text_node([0.0; 2]).unwrap();
         doc.create_text_node([200.0; 2]).unwrap();
-        let prg = dir.path().join("source.prg");
-        doc.save(&prg).unwrap();
-        let mut file = ProjectFile::load(&prg).unwrap();
+        let source = dir.path().join("source.mio");
+        doc.save(&source).unwrap();
+        let mut file = ProjectFile::load(&source).unwrap();
         file.stage.as_array_mut().unwrap().push(serde_json::json!({
             "_": "MultiTargetUndirectedEdge", "uuid": "hyperedge",
             "associationList": [{"$":"/1"},{"$":"/0"},{"$":"/1"}],
@@ -1079,9 +1079,9 @@ mod tests {
         opened.save(&path).unwrap();
         assert!(is_database(&path).unwrap());
         let mut native = Document::open(&path).unwrap();
-        native.save(&dir.path().join("export.prg")).unwrap();
+        native.save(&dir.path().join("export.mio")).unwrap();
         assert_eq!(
-            Document::open(&dir.path().join("export.prg"))
+            Document::open(&dir.path().join("export.mio"))
                 .unwrap()
                 .nodes,
             native.nodes

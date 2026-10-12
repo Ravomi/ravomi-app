@@ -525,7 +525,7 @@ impl Home {
                         if matches.is_empty() {
                             ui.add_space(48.0);
                             ui.label(if query.is_empty() {
-                                "还没有最近文件。新建草稿，或打开 .mio 项目或 .prg 兼容画布开始。"
+                                "还没有最近文件。新建草稿，或打开 .mio 项目开始。"
                             } else {
                                 "没有匹配的最近文件"
                             });
@@ -1045,7 +1045,7 @@ fn recent_card(ui: &egui::Ui, card: egui::Rect, recent: &Recent, highlighted: bo
             graph.edges.len()
         )
     } else {
-        "Ravomi 项目 / 兼容画布".to_owned()
+        "Ravomi 项目".to_owned()
     };
     painter.text(
         inner.left_bottom() + egui::vec2(if list { 136.0 } else { 14.0 }, -17.0),
@@ -1130,8 +1130,8 @@ mod tests {
         let storage = Some(dir.path().join("recent.json"));
         let mut a = Document::blank().unwrap();
         let mut b = Document::blank().unwrap();
-        a.save(&dir.path().join("a.prg")).unwrap();
-        b.save(&dir.path().join("b.prg")).unwrap();
+        a.save(&dir.path().join("a.mio")).unwrap();
+        b.save(&dir.path().join("b.mio")).unwrap();
         let mut home = Home::default();
         home.observe_at(&a, storage.clone()).unwrap();
         home.observe_at(&b, storage.clone()).unwrap();
@@ -1167,7 +1167,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let storage = dir.path().join("recent.json");
         let mut doc = Document::blank().unwrap();
-        doc.save(&dir.path().join("keep.prg")).unwrap();
+        doc.save(&dir.path().join("keep.mio")).unwrap();
         let path = doc.path.clone().unwrap();
         let mut home = Home::default();
         home.observe_at(&doc, Some(storage.clone())).unwrap();
@@ -1220,19 +1220,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().join("中文 spaces ' $() ;");
         std::fs::create_dir(&folder).unwrap();
-        let command = location_command(&folder.join("test.prg")).unwrap();
+        let command = location_command(&folder.join("test.mio")).unwrap();
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),
             [folder.canonicalize().unwrap().as_os_str()]
         );
-        assert!(location_command(&dir.path().join("missing/file.prg")).is_err());
+        assert!(location_command(&dir.path().join("missing/file.mio")).is_err());
     }
 
     #[test]
     fn recent_card_context_menu_and_delete_dialog_preserve_the_file_until_confirmed() {
         let dir = tempfile::tempdir().unwrap();
         let mut doc = Document::blank().unwrap();
-        doc.save(&dir.path().join("长中文名称 group-near.prg"))
+        doc.save(&dir.path().join("长中文名称 group-near.mio"))
             .unwrap();
         let path = doc.path.clone().unwrap();
         for light in [false, true] {
@@ -1369,11 +1369,11 @@ mod tests {
     fn missing_recent_files_are_pruned_on_load_and_home_reentry() {
         let dir = tempfile::tempdir().unwrap();
         let storage = dir.path().join("recent.json");
-        let missing = dir.path().join("missing.prg");
-        let corrupt = dir.path().join("corrupt.prg");
+        let missing = dir.path().join("missing.mio");
+        let corrupt = dir.path().join("corrupt.mio");
         std::fs::write(&corrupt, b"invalid document, but still a real file").unwrap();
         let mut doc = Document::blank().unwrap();
-        doc.save(&dir.path().join("valid.prg")).unwrap();
+        doc.save(&dir.path().join("valid.mio")).unwrap();
         std::fs::write(
             &storage,
             serde_json::to_vec(&[&missing, &corrupt, doc.path.as_ref().unwrap()]).unwrap(),

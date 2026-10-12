@@ -67,7 +67,7 @@ Arcraven · 可见、可连接、可干预的多 Agent 工作空间
 
 | 入口 | 当前可用 | 正在补齐 |
 | --- | --- | --- |
-| **Rust / Bevy 画布** | 文字节点、连线、嵌套分组、图片导入、搜索、缩放平移、撤销重做、`.prg` 保存与恢复副本、PNG 导出 | 新 UI 规范、日常编辑细节与跨平台验证 |
+| **Rust / Bevy 画布** | 文字节点、连线、嵌套分组、图片导入、搜索、缩放平移、撤销重做、`.mio` 保存与恢复副本、PNG 导出 | 新 UI 规范、日常编辑细节与跨平台验证 |
 | **React / Tauri 原型** | 对象列表、文字编辑、新建、打开、保存、撤销重做；复用 Rust 文档核心 | 空间画布与完整交互迁移；浏览器入口仅作界面预览 |
 | **Bevy 内嵌 React 输入** | 通过 Wry 子 WebView 在原生画布中编辑节点文字 | 独立实验入口，已有 Linux X11 / XWayland 验证 |
 
@@ -93,12 +93,12 @@ cd ravomi-app
 ./run.sh
 ```
 
-启动器按需编译并进入首页。选择“新建草稿”，即可开始编辑；也可以打开已有 `.prg` 文档。
+启动器按需编译并进入首页。选择“新建草稿”，即可开始编辑；也可以打开已有 `.mio` 项目。
 
 打开指定文件并使用本机中文字体：
 
 ```sh
-./run.sh /absolute/path/example.prg --font /path/to/your-cjk-font.ttf
+./run.sh /absolute/path/example.mio --font /path/to/your-cjk-font.ttf
 ```
 
 Linux 默认字体路径为 `/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc`；本机路径不同时使用 `--font` 指定。
@@ -186,4 +186,4 @@ Ravomi 由 Arcraven 开发，沿用 Project Graph / Graplu 原型的部分基础
 
 ## 原生项目文件
 
-新建 Ravomi 项目使用 `.mio`：以 SQLite schema 3 保存独立画布对象、有序图关系、资产和明确选定的协作历史，事务更新变化记录，正文按 SHA-256 共享。旧 ZIP `.mio` v1/v2 和 `.prg` 仍可读取，明确保存为 `.mio` 才升级。打开项目不恢复归档中的任务，本机活动运行记录仍独立保存。表结构、转换规则和当前限制见 [存储规范](STORAGE.md)。
+Ravomi 项目使用 `.mio`：以 SQLite schema 3 保存独立画布对象、有序图关系、资产和明确选定的协作历史，事务更新变化记录，正文按 SHA-256 共享。旧 ZIP `.mio` v1/v2 仍可读取，保存时升级。不再支持 `.prg` 读写、恢复与系统关联。打开项目不恢复归档中的任务，本机活动运行记录仍独立保存。表结构和当前限制见 [存储规范](STORAGE.md)。

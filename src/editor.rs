@@ -832,7 +832,6 @@ impl Editor {
                 std::thread::spawn(move || {
                     let path = rfd::FileDialog::new()
                         .add_filter(project::FILTER_NAME, &[project::EXTENSION])
-                        .add_filter("兼容画布 (.prg)", &[project::LEGACY_EXTENSION])
                         .set_file_name(&name)
                         .save_file();
                     let _ = tx.send(path);

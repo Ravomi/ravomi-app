@@ -20,6 +20,7 @@ pub struct ProjectFile {
 
 impl ProjectFile {
     pub fn load(path: &Path) -> Result<Self> {
+        project::Format::for_destination(path)?;
         if project_sqlite::is_database(path)? {
             return Ok(project_sqlite::load(path)?.file);
         }
@@ -32,7 +33,7 @@ impl ProjectFile {
         if bytes.starts_with(project_sqlite::MAGIC) {
             let mut temp = tempfile::NamedTempFile::new()?;
             std::io::Write::write_all(&mut temp, bytes)?;
-            return Self::load(temp.path());
+            return Ok(project_sqlite::load(temp.path())?.file);
         }
         Self::read(std::io::Cursor::new(bytes))
     }
@@ -468,8 +469,8 @@ mod tests {
     #[test]
     #[ignore = "Download the pinned original tutorial with run.sh first"]
     fn original_tutorial_import_is_complete() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures/tutorial-shortcut-keys-3.1-original.prg");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/tutorial-shortcut-keys.mio");
         let file = ProjectFile::load(&path).unwrap();
         assert_eq!(file.stage.as_array().unwrap().len(), 623);
         let graph = Graph::from_file(file).unwrap();

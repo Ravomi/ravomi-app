@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Render an offline MIO/PRG overview; never execute document content."""
+"""Render an offline MIO overview; never execute document content."""
 
 import argparse
 import io
@@ -20,7 +20,6 @@ gi.require_version("PangoCairo", "1.0")
 from gi.repository import GLib, Pango, PangoCairo
 
 MAX_JSON = 16 * 1024 * 1024
-NATIVE_MAGIC = b"PGDOC4\r\n"
 SQLITE_MAGIC = b"SQLite format 3\0"
 
 
@@ -116,103 +115,6 @@ def sqlite_preview(source):
         return graph, attachments
     finally:
         conn.close()
-
-
-def native_preview(source):
-    """Read the v4 JSON projection and raw assets, never decode native Variants."""
-    import hashlib
-    import struct
-
-    with open(source, "rb") as stream:
-        header = stream.read(32)
-        if len(header) != 32:
-            raise ValueError("Truncated PRG header")
-        magic, version, length, offset, reserved = struct.unpack("<8sIIQQ", header)
-        file_size = os.fstat(stream.fileno()).st_size
-        if (
-            magic != NATIVE_MAGIC
-            or version != 4
-            or reserved != 0
-            or not 0 < length <= 4 * 1024 * 1024
-            or offset < 32
-            or offset + length != file_size
-        ):
-            raise ValueError("Invalid PRG directory")
-        stream.seek(offset)
-        manifest = json.loads(stream.read(length))
-        if (
-            not isinstance(manifest, dict)
-            or manifest.get("version") != 4
-            or manifest.get("codec") != "godot-variant-4"
-            or not isinstance(manifest.get("blocks"), dict)
-            or len(manifest["blocks"]) > 200000
-        ):
-            raise ValueError("Unsupported PRG manifest")
-        blocks = manifest["blocks"]
-        spans = []
-        for entry in blocks.values():
-            if not isinstance(entry, dict):
-                raise TypeError("Invalid PRG block")
-            start, count = entry.get("offset"), entry.get("length")
-            digest = entry.get("sha256")
-            if (
-                type(start) is not int
-                or type(count) is not int
-                or start < 32
-                or not 0 <= count <= 256 * 1024 * 1024
-                or start + count > offset
-                or entry.get("kind") not in ("variant", "raw", "json")
-                or not isinstance(digest, str)
-                or len(digest) != 64
-                or any(c not in "0123456789abcdef" for c in digest)
-            ):
-                raise ValueError("Invalid PRG block range or checksum")
-            spans.append((start, start + count))
-        previous = 32
-        for start, end in sorted(spans):
-            if start < previous:
-                raise ValueError("Overlapping PRG blocks")
-            previous = end
-
-        def read_block(name, kind):
-            entry = blocks[name]
-            if entry["kind"] != kind or entry["length"] > MAX_JSON:
-                raise ValueError("PRG preview block exceeds limit")
-            stream.seek(entry["offset"])
-            data = stream.read(entry["length"])
-            if (
-                len(data) != entry["length"]
-                or hashlib.sha256(data).hexdigest() != entry["sha256"]
-            ):
-                raise ValueError("Damaged PRG preview block")
-            return data
-
-        graph = json.loads(read_block("preview", "json"))
-        if not isinstance(graph, dict) or not isinstance(graph.get("objects"), list):
-            raise TypeError("Invalid PRG preview graph")
-        if len(graph["objects"]) > 5000:
-            raise ValueError("PRG preview has too many objects")
-        attachments = {}
-        total_bytes = 0
-        for obj in graph["objects"]:
-            if not isinstance(obj, dict) or not isinstance(obj.get("properties"), dict):
-                raise TypeError("Invalid PRG preview record")
-            props = obj["properties"]
-            identifier = props.get("preview_attachment")
-            if not identifier or identifier in attachments:
-                continue
-            entry = blocks["asset/" + identifier]
-            if (
-                entry["length"] > MAX_JSON
-                or total_bytes + entry["length"] > 64 * 1024 * 1024
-            ):
-                continue
-            data = read_block("asset/" + identifier, "raw")
-            total_bytes += len(data)
-            attachments[identifier] = image_surface(
-                data, native_text(props.get("image_format", "png"))
-            )
-        return graph, attachments
 
 
 def prefers_light_theme():
@@ -755,6 +657,8 @@ def render(input_path, output, requested_size, requested_height=None):
         os.path.exists(output) and os.path.samefile(input_path, output)
     ):
         raise ValueError("Thumbnail output must not replace the source document")
+    if os.path.splitext(input_path)[1].lower() != ".mio":
+        raise ValueError("Only .mio projects are supported")
     # Keep two device pixels per requested pixel for high-density previews.
     size = 2 * max(32, min(1024, int(requested_size)))
     canvas_height = (
@@ -766,8 +670,6 @@ def render(input_path, output, requested_size, requested_height=None):
         magic = stream.read(16)
     if magic == SQLITE_MAGIC:
         graph, attachments = sqlite_preview(input_path)
-    elif magic[:8] == NATIVE_MAGIC:
-        graph, attachments = native_preview(input_path)
     else:
         if os.path.getsize(input_path) > 256 * 1024 * 1024:
             raise ValueError("Document exceeds thumbnail size limit")
@@ -776,9 +678,11 @@ def render(input_path, output, requested_size, requested_height=None):
                 raise ValueError("Too many archive entries")
             attachments = {}
             names = archive.namelist()
-            stage_entry = "stage.msgpack"
-            assets_prefix = "attachments/"
+            stage_entry = "canvas/stage.msgpack"
+            assets_prefix = "assets/"
             is_mio = "manifest.json" in names
+            if not is_mio or "stage.msgpack" in names or "stage.json" in names:
+                raise ValueError("Unsupported Ravomi project: legacy PRG content")
             if is_mio:
                 import uuid
 
@@ -809,9 +713,7 @@ def render(input_path, output, requested_size, requested_height=None):
                 assets_prefix = "assets/"
                 if stage_entry not in names:
                     raise ValueError("Missing Ravomi canvas stage")
-            if not is_mio and "stage.json" in names:
-                graph = json.loads(archive_bytes(archive, "stage.json"))
-            elif stage_entry in names:
+            if stage_entry in names:
                 import msgpack
 
                 graph = legacy_graph(
@@ -832,24 +734,8 @@ def render(input_path, output, requested_size, requested_height=None):
                                 archive_bytes(archive, name), name.rsplit(".", 1)[-1]
                             )
                             break
-            elif "thumbnail.png" in names:
-                original = image_surface(archive_bytes(archive, "thumbnail.png"), "png")
-                surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, canvas_height)
-                ctx = cairo.Context(surface)
-                factor = min(
-                    size / original.get_width(), canvas_height / original.get_height()
-                )
-                ctx.translate(
-                    (size - original.get_width() * factor) / 2,
-                    (canvas_height - original.get_height() * factor) / 2,
-                )
-                ctx.scale(factor, factor)
-                ctx.set_source_surface(original)
-                ctx.paint()
-                write_preview(surface, output)
-                return
             else:
-                raise ValueError("Missing stage.json or stage.msgpack")
+                raise ValueError("Missing Ravomi canvas stage")
     objects = graph.get("objects")
     if not isinstance(objects, list) or len(objects) > 5000:
         raise ValueError("Invalid or oversized graph")
@@ -1268,7 +1154,7 @@ def render(input_path, output, requested_size, requested_height=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", help="saved .mio project or .prg document")
+    parser.add_argument("source", help="saved .mio project")
     parser.add_argument("output", help="destination PNG")
     parser.add_argument("size", type=int, help="requested thumbnail size in pixels")
     parser.add_argument(

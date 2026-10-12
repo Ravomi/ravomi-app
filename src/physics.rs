@@ -1400,8 +1400,8 @@ mod tests {
     #[test]
     #[ignore = "requires pinned tutorial from run.sh"]
     fn tutorial_whole_group_physics_drag_preserves_all_members_edges_and_saved_layout() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures/tutorial-shortcut-keys-3.1-original.prg");
+        let fixture =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/tutorial-shortcut-keys.mio");
         let doc = Document::open(&fixture).unwrap();
         let node_count = doc.nodes.len();
         assert!(node_count >= 393);
@@ -1415,7 +1415,7 @@ mod tests {
         );
         let mut app = group_everything_and_drag(doc);
         let dir = tempfile::tempdir().unwrap();
-        let output = dir.path().join("whole-group-drag.prg");
+        let output = dir.path().join("whole-group-drag.mio");
         app.world_mut()
             .resource_mut::<Scene>()
             .0
@@ -1455,9 +1455,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires desktop tutorial-main-3.1 and 3.2 PRG files"]
+    #[ignore = "requires desktop tutorial-main-3.1 and 3.2 MIO files"]
     fn desktop_tutorial_groups_keep_members_together_after_drag_undo_and_redo() {
-        for name in ["tutorial-main-3.1.prg", "tutorial-main-3.2.prg"] {
+        for name in ["tutorial-main-3.1.mio", "tutorial-main-3.2.mio"] {
             let mut doc = Document::open(&PathBuf::from("/home/waya/Desktop").join(name)).unwrap();
             assert!(doc.nodes.len() > 600);
             // Whole-document regrouping requires an unlocked in-memory copy.

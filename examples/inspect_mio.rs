@@ -5,7 +5,7 @@ fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let path = args
         .first()
-        .ok_or("usage: inspect_prg FILE.prg [TEXT_OUTPUT.txt]")?;
+        .ok_or("usage: inspect_mio FILE.mio [TEXT_OUTPUT.txt]")?;
     let file = ProjectFile::load(Path::new(path))?;
     let mut counts = BTreeMap::new();
     let mut text = String::new();

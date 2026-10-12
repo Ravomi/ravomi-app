@@ -73,7 +73,7 @@ The repository contains three entry points built on a shared Rust document found
 
 | Entry point | Available today | Work remaining |
 | --- | --- | --- |
-| **Rust / Bevy canvas** | Text nodes, connections, nested groups, image import, search, zoom and pan, undo and redo, `.prg` saving and recovery copies, PNG export | New UI specification, everyday editing refinements, and cross-platform validation |
+| **Rust / Bevy canvas** | Text nodes, connections, nested groups, image import, search, zoom and pan, undo and redo, `.mio` saving and recovery copies, PNG export | New UI specification, everyday editing refinements, and cross-platform validation |
 | **React / Tauri prototype** | Object list, text editing, new/open/save, undo and redo; reuses the Rust document core | Spatial canvas and full interaction migration; the browser entry point is a UI preview only |
 | **React input embedded in Bevy** | Node text editing in the native canvas through a Wry child WebView | A separate experimental entry point, with Linux X11 / XWayland validation recorded |
 
@@ -105,12 +105,12 @@ cd ravomi-app
 ./run.sh
 ```
 
-The launcher builds the application as needed and opens the home screen. Choose “新建草稿” (New draft) to start editing, or open an existing `.prg` document.
+The launcher builds the application as needed and opens the home screen. Choose “新建草稿” (New draft) to start editing, or open an existing `.mio` project.
 
 To open a specific file and use a local CJK font:
 
 ```sh
-./run.sh /absolute/path/example.prg --font /path/to/your-cjk-font.ttf
+./run.sh /absolute/path/example.mio --font /path/to/your-cjk-font.ttf
 ```
 
 On Linux, the default font path is `/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc`. Use `--font` if the font is installed elsewhere.
@@ -210,4 +210,4 @@ The project is licensed under [GPL-3.0-only](LICENSE). Third-party components re
 
 ## Native project files
 
-New Ravomi projects use `.mio`: a SQLite document containing canvas objects, ordered graph relationships, assets, and explicitly selected collaboration history. Schema 3 updates changed records in a transaction and shares content by SHA-256. Existing ZIP `.mio` v1/v2 and `.prg` drawings remain readable; explicitly saving as `.mio` upgrades the container. Opening a project never resumes archived runs; local execution records remain separate. See the [storage specification](STORAGE.md) for the schema, conversion rules, and current limits.
+Ravomi projects use `.mio`: a SQLite document containing canvas objects, ordered graph relationships, assets, and explicitly selected collaboration history. Schema 3 updates changed records in a transaction and shares content by SHA-256. Existing ZIP `.mio` v1/v2 remain readable and upgrade on save. PRG reading, writing, recovery, and file associations are no longer supported. Opening a project never resumes archived runs; local execution records remain separate. See the [storage specification](STORAGE.md) for the schema and current limits.

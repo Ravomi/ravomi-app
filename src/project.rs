@@ -1,5 +1,5 @@
 //! Ravomi's portable project container. The canvas codec is independent of the
-//! container version; PRG is a compatibility format, never a renamed MIO file.
+//! container version. Only Ravomi MIO projects are supported.
 use crate::{Result, project_history::History};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,11 +11,9 @@ use std::{
 pub const EXTENSION: &str = "mio";
 pub const DEFAULT_FILE_NAME: &str = "未命名项目.mio";
 pub const FILTER_NAME: &str = "Ravomi 项目 (.mio)";
-pub use crate::storage::PRG_EXTENSION as LEGACY_EXTENSION;
 pub const MIME: &str = "application/x-ravomi";
 pub const MANIFEST_ENTRY: &str = "manifest.json";
 pub use crate::project_history::HISTORY_ENTRY;
-pub const LEGACY_PREFIX: &str = "extensions/legacy/";
 const FORMAT_ID: &str = "ravomi-project";
 pub const SCHEMA_VERSION: u32 = 3;
 pub const SQLITE_SCHEMA_VERSION: u32 = SCHEMA_VERSION;
@@ -102,29 +100,25 @@ impl Manifest {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {
     Mio,
-    Prg,
 }
 
 impl Format {
     pub fn stage(self) -> &'static str {
         match self {
             Self::Mio => "canvas/stage.msgpack",
-            Self::Prg => crate::storage::STAGE_ENTRY,
         }
     }
 
     pub fn assets(self) -> &'static str {
         match self {
             Self::Mio => "assets/",
-            Self::Prg => crate::storage::ATTACHMENTS_PREFIX,
         }
     }
 
     pub fn for_destination(path: &Path) -> Result<Self> {
         match path.extension().and_then(|extension| extension.to_str()) {
             Some(extension) if extension.eq_ignore_ascii_case(EXTENSION) => Ok(Self::Mio),
-            Some(extension) if extension.eq_ignore_ascii_case(LEGACY_EXTENSION) => Ok(Self::Prg),
-            _ => Err("项目文件请使用 .mio；兼容画布导出请使用 .prg".into()),
+            _ => Err("仅支持 .mio 项目，不再支持 .prg 画布".into()),
         }
     }
 }
@@ -156,25 +150,10 @@ pub(crate) fn inspect<R: Read + Seek>(archive: &mut zip::ZipArchive<R>) -> Resul
         .file_names()
         .any(|name| name == crate::storage::STAGE_ENTRY);
     if has_legacy_stage {
-        // PRG has always allowed opaque extra entries. A third-party manifest
-        // or canvas/notes entry must not turn an existing PRG into a MIO file.
-        if has_manifest && archive.by_name(MANIFEST_ENTRY)?.size() <= MAX_MANIFEST_BYTES {
-            let bytes = read_entry(archive, MANIFEST_ENTRY, MAX_MANIFEST_BYTES)?;
-            if serde_json::from_slice::<serde_json::Value>(&bytes)
-                .is_ok_and(|value| value["format"] == FORMAT_ID)
-            {
-                return Err("项目同时包含旧画布入口与新格式标识".into());
-            }
-        }
-        return Ok(Contents {
-            format: Format::Prg,
-            manifest: Manifest::default(),
-            history: History::default(),
-            bindings: None,
-        });
+        return Err("不再支持 .prg 画布，请打开 .mio 项目".into());
     }
     if !has_manifest {
-        return Err("项目缺少 manifest.json 或兼容画布 stage.msgpack".into());
+        return Err("项目缺少 manifest.json".into());
     }
     validate_entries(archive)?;
     let manifest: Manifest =
@@ -255,15 +234,55 @@ mod tests {
     use super::*;
 
     #[test]
+    fn prg_content_is_rejected_without_changing_the_session_or_files() {
+        use std::io::Write;
+        let directory = tempfile::tempdir().unwrap();
+        let mut session = crate::session::Session::new().unwrap();
+        session
+            .execute(crate::session::Command::AddText { x: 0.0, y: 0.0 })
+            .unwrap();
+        let id = session.project_id().to_owned();
+        for name in ["old.prg", "renamed.mio"] {
+            let path = directory.path().join(name);
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            zip.start_file("stage.msgpack", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(&[0x90]).unwrap();
+            zip.finish().unwrap();
+            let before = std::fs::read(&path).unwrap();
+            assert!(crate::ProjectFile::load(&path).is_err());
+            assert!(crate::ProjectFile::from_bytes(&before).is_err());
+            assert!(
+                session
+                    .execute(crate::session::Command::Open {
+                        path: path.to_string_lossy().into_owned(),
+                        discard: true,
+                    })
+                    .is_err()
+            );
+            assert_eq!(session.project_id(), id);
+            assert_eq!(session.snapshot().nodes.len(), 1);
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+        }
+        let mut document = crate::document::Document::blank().unwrap();
+        let path = directory.path().join("native.mio");
+        document.save(&path).unwrap();
+        let disguised = directory.path().join("native.PRG");
+        std::fs::copy(path, &disguised).unwrap();
+        let before = std::fs::read(&disguised).unwrap();
+        assert!(crate::document::Document::open(&disguised).is_err());
+        assert!(document.save(&disguised).is_err());
+        assert!(document.save_snapshot(&disguised).is_err());
+        assert_eq!(std::fs::read(disguised).unwrap(), before);
+    }
+
+    #[test]
     fn save_names_have_one_explicit_container_format() {
         assert_eq!(
             save_path(Path::new("中文项目")).unwrap(),
             Path::new("中文项目.mio")
         );
-        assert_eq!(
-            save_path(Path::new("old.PRG")).unwrap(),
-            Path::new("old.PRG")
-        );
+        assert!(save_path(Path::new("old.PRG")).is_err());
         assert_eq!(
             save_path(Path::new("new.MIO")).unwrap(),
             Path::new("new.MIO")

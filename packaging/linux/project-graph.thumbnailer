@@ -1,4 +1,4 @@
 [Thumbnailer Entry]
 TryExec=/usr/libexec/project-graph-bevy-thumbnailer
 Exec=/usr/libexec/project-graph-bevy-thumbnailer %i %o %s
-MimeType=application/x-ravomi;application/vnd.project-graph;application/x-project-graph;
+MimeType=application/x-ravomi;

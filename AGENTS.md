@@ -25,8 +25,8 @@ Ravomi 是 Arcraven 的无限画布多 Agent 协作产品。核心定义：召�
 - 验证使用 `cargo fmt --all --check`、`cargo test --workspace --locked` 和 `cargo clippy --workspace --all-targets --locked -- -D warnings`，可选 `--release` 复用发布模式缓存。
 - React/Tauri 及内嵌输入修改同时遵循 [app 验证说明](app/README.md)。仅修改文档时检查本地链接、命令/路径、实现状态与规范一致性，不把历史测试结果记成当次重新执行；不为纯文档变更启动无关 GPU 基准。
 - GPU、系统字体及教程文件测试用 `-- --include-ignored --test-threads=1`；确认字体、fixtures 与 Vulkan 可用。桌面运行及性能测试遵循用户授权，启动器 `./run.sh` 会按需编译。不要在测量帧耗时的同时编译或运行其他负载。
-- Linux `.prg` 缩略图验证：`python3 -m unittest discover -s packaging/linux -p test_thumbnailer.py`。Python 不参与实时 Bevy 画布渲染。
+- Linux `.mio` 缩略图验证：`python3 -m unittest discover -s packaging/linux -p test_thumbnailer.py`。Python 不参与实时 Bevy 画布渲染。
 - `target/`、`results/`、`fixtures/` 不纳入版本控制；不要提交令牌、环境文件或用户文档。`validation/` 保留有说明的验证工件。
-- 不更改 `.prg` MIME 和格式标识来做品牌重命名。当前 crate 名称暂保留 `project-graph-bevy-canvas`，shader 的 embedded 路径依赖该名称。
+- 项目文件仅支持 `.mio`，不再兼容 `.prg` 读写、恢复或系统关联。当前 crate 名称暂保留 `project-graph-bevy-canvas`，shader 的 embedded 路径依赖该名称。
 - 修改文件使用直接编辑工具，不用 Python/Node/内联脚本批量改写。不要静默吞掉错误；运行时错误应进入现有 UI 提示流程。
 - Bevy 版本以当前锁文件为准；Linux 窗口/字体/输入/帧耗时排查参考 `.agents/skills/bevy-wayland-vulkan/SKILL.md`。

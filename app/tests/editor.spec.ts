@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Deliberately mocked IPC: these tests cover UI lifecycle and payloads, while
-// src/session.rs tests the real Rust document/history/PRG implementation.
+// src/session.rs tests the real Rust document/history/MIO implementation.
 async function desktop(page: Page) {
   await page.addInitScript(() => {
     const testWindow = window as typeof window & {
@@ -14,7 +14,7 @@ async function desktop(page: Page) {
     testWindow.commands = [];
     const snapshot = {
       projectId: 'editor-project', documentToken: 'editor-document', archivedWorkflowCount: 0,
-      title: '很长的中文文件名——项目探索与想法整理.prg', path: '/test.prg',
+      title: '很长的中文文件名——项目探索与想法整理.mio', path: '/test.mio',
       dirty: false, canUndo: false, canRedo: false,
       nodes: [{ id: 'node-1', kind: 'TextNode', text: '原始想法', rect: [0, 0, 100, 50], editable: true }],
       edgeCount: 0,
@@ -91,7 +91,7 @@ test('saving applies a draft, shows IO errors, and preserves the edited text', a
   await expect(page.locator('.document-tab')).toContainText('未保存');
   expect(await page.evaluate(() => (window as unknown as { commands: unknown[] }).commands)).toEqual([
     { type: 'edit_text', id: 'node-1', text: '新的中文想法' },
-    { type: 'save', path: '/test.prg' },
+    { type: 'save', path: '/test.mio' },
   ]);
 });
 

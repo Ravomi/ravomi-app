@@ -151,7 +151,7 @@ fn reloaded_identical_fonts_share_glyph_keys_without_merging_distinct_fonts_or_f
 #[test]
 #[ignore = "requires GRAPLU_FONT_CACHE_DOC and installed Noto Sans CJK font"]
 fn tutorial_font_reload_does_not_regenerate_or_grow_the_glyph_atlas() {
-    let path = std::env::var("GRAPLU_FONT_CACHE_DOC").expect("set a tutorial PRG path");
+    let path = std::env::var("GRAPLU_FONT_CACHE_DOC").expect("set a tutorial MIO path");
     let doc = super::super::Document::open(std::path::Path::new(&path)).unwrap();
     let bytes =
         std::fs::read("/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc")
@@ -267,10 +267,7 @@ fn tutorial_auto_size_preserves_hard_lines_and_contains_measured_text() {
         Document, Interaction, NodeAssets, NodeLabel, Scene, editor, node_text_layout, padding,
         physics, text_width, theme,
     };
-    let doc = Document::open(std::path::Path::new(
-        "fixtures/tutorial-shortcut-keys-3.1-original.prg",
-    ))
-    .unwrap();
+    let doc = Document::open(std::path::Path::new("fixtures/tutorial-shortcut-keys.mio")).unwrap();
     let mut app = app();
     let font = app
         .world_mut()

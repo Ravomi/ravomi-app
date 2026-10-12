@@ -6,7 +6,7 @@
 
 原生项目为 **`项目名称.mio`**，默认 `未命名项目.mio`，MIME `application/x-ravomi`。新保存使用 SQLite，文件头为 `SQLite format 3\0`，`application_id = 0x4d494f33`（MIO3），`user_version = 3`。无需用户安装数据库服务。
 
-旧 ZIP `.mio` v1/v2 和 ZIP + MessagePack `.prg` 仍可打开；仅明确保存为 `.mio` 时升级，打开不改写原件。另存新路径保留旧原件。改后缀不等于转换，识别以内容为准。`.prg` 原格式、MIME 和标识不变，含协作历史或无法表达的扩展时拒绝降级。
+仅支持 `.mio` 项目，旧 ZIP `.mio` v1/v2 在保存时升级为 SQLite，打开不改写原件。另存新路径保留旧原件。不再读取、导出或恢复 `.prg`，旧 PRG 内容改名为 `.mio` 仍会被拒绝；系统文件关联与缩略图也仅注册 `.mio`。
 
 `project_meta.manifest` 使用 JSON 字节，声明 `format: "ravomi-project"`、`schemaVersion: 3`、UUID `projectId`、`canvasSchemaVersion: 1`、`requiredFeatures: ["sqlite-graph-v1"]`。未知版本或必需能力拒绝打开；可选清单扩展保留。ZIP v3 无效，旧 v1/v2 客户端不能读取数据库。
 
@@ -28,7 +28,7 @@
 | `run_sources` / `runs.retry_of` | 有序来源与重试关系；与视觉连线分开校验 |
 | `objects` | SHA-256 → 实际字节；相同正文、附件和记录可共享内容，哈希不合并身份或来源 |
 | `attachments` | 原附件名 → 内容对象，包括既有 `ravomi-code-agents.json` 绑定字节 |
-| `extensions` | 旧不透明条目名 → 内容对象；PRG 额外条目放在 `extensions/legacy/` 名下 |
+| `extensions` | 不透明条目名 → 内容对象；保留已有 MIO 中的扩展条目 |
 
 画布持久身份不用运行时数组下标或 Bevy Entity。边拥有独立 ID，端点是有序列表，允许自环、平行边和多端点边；不能用 `(from,to)` 唯一约束，也不能用集合去重端点。分组为父子森林，执行来源为独立 DAG，不能把普通画布环路误判为执行环。
 
@@ -68,7 +68,7 @@ History 领域版本仍为 1；保存目标、模型、文件、计划、固定�
 | --- | --- |
 | `<state>/graplu/recent.json` | 最近文件索引，不含正文 |
 | `<state>/graplu/recovery/settings.json` | 恢复策略 |
-| `<state>/graplu/recovery/<session>/<tab>/<generation>/document.mio` + `entry.json` | 独立恢复代与来源信息，兼容发现旧 `document.prg` |
+| `<state>/graplu/recovery/<session>/<tab>/<generation>/document.mio` + `entry.json` | 独立恢复代与来源信息；旧 `document.prg` 不再恢复，也不自动删除 |
 | `<tauri-app-data>/code-collaboration/workflows.json` + `runtime.lock` | Tauri 活动运行库与目录锁 |
 | `<canvas-data>/ravomi/code-collaboration-canvas/workflows.json` + `runtime.lock` | Bevy 活动运行库与目录锁 |
 | 用户选择的 `ravomi-<runId>/` | 人工通过后导出的代码，保留原后缀 |

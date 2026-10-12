@@ -5,10 +5,4 @@
     <comment xml:lang="zh_CN">Ravomi 项目</comment>
     <glob pattern="*.mio" weight="80"/>
   </mime-type>
-  <mime-type type="application/vnd.project-graph">
-    <comment>Project Graph document</comment>
-    <comment xml:lang="zh_CN">Project Graph 图文件</comment>
-    <alias type="application/x-project-graph"/>
-    <glob pattern="*.prg" weight="80"/>
-  </mime-type>
 </mime-info>

@@ -411,10 +411,7 @@ impl Tabs {
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let result = rfd::FileDialog::new()
-                .add_filter(
-                    "Ravomi 项目与兼容画布",
-                    &[project::EXTENSION, project::LEGACY_EXTENSION],
-                )
+                .add_filter(project::FILTER_NAME, &[project::EXTENSION])
                 .pick_file()
                 .map(|path| Document::open(&path).map_err(|e| e.to_string()))
                 .transpose();
@@ -1371,7 +1368,7 @@ mod tests {
             "tutorial-main-3.2",
             "group-near •",
         ] {
-            doc.path = Some(format!("{label}.prg").into());
+            doc.path = Some(format!("{label}.mio").into());
             for pixels_per_point in [1.0, 1.75, 2.625, 3.5] {
                 for gap in [180.0, 240.0, 300.0, 400.0] {
                     let ctx = egui::Context::default();

@@ -217,7 +217,7 @@ fn render(
     }
     let baseline = existing(path)?;
     let directory = tempfile::tempdir()?;
-    let input = directory.path().join("scene.prg");
+    let input = directory.path().join("scene.mio");
     let output = directory.path().join("image.png");
     let font_path = directory.path().join("font.ttf");
     document.save_snapshot(&input)?;

@@ -271,37 +271,25 @@ impl Document {
         });
         let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
         archive.start_file(
-            crate::storage::STAGE_ENTRY,
+            Format::Mio.stage(),
             zip::write::SimpleFileOptions::default(),
         )?;
         rmpv::encode::write_value(&mut archive, &Value::Array(vec![]))?;
         archive.start_file(
-            crate::storage::METADATA_ENTRY,
+            project::MANIFEST_ENTRY,
             zip::write::SimpleFileOptions::default(),
         )?;
-        rmpv::encode::write_value(
-            &mut archive,
-            &Value::Map(vec![(
-                "version".into(),
-                crate::storage::LEGACY_DOCUMENT_VERSION.into(),
-            )]),
-        )?;
+        let manifest = Manifest {
+            schema_version: 1,
+            required_features: vec![],
+            ..document.manifest.clone()
+        };
+        serde_json::to_writer(&mut archive, &manifest)?;
         archive.start_file(
-            crate::storage::TAGS_ENTRY,
+            project::HISTORY_ENTRY,
             zip::write::SimpleFileOptions::default(),
         )?;
-        rmpv::encode::write_value(&mut archive, &Value::Array(vec![]))?;
-        archive.start_file(
-            crate::storage::REFERENCE_ENTRY,
-            zip::write::SimpleFileOptions::default(),
-        )?;
-        rmpv::encode::write_value(
-            &mut archive,
-            &Value::Map(vec![
-                ("sections".into(), Value::Map(vec![])),
-                ("files".into(), Value::Array(vec![])),
-            ]),
-        )?;
+        serde_json::to_writer(&mut archive, &document.archived_history)?;
         document.archive = Some(archive.finish()?.into_inner());
         Ok(document)
     }
@@ -341,6 +329,7 @@ impl Document {
         }
     }
     pub fn open(path: &Path) -> Result<Self> {
+        Format::for_destination(path)?;
         let (bytes, disk_bytes, native_manifest) = if crate::project_sqlite::is_database(path)? {
             let loaded = crate::project_sqlite::load(path)?;
             (
@@ -1696,17 +1685,12 @@ impl Document {
         let bytes = self
             .archive
             .as_ref()
-            .ok_or("此文档没有可保存的原始 PRG 数据")?;
+            .ok_or("此文档没有可保存的原始画布数据")?;
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
         let source_contents = project::inspect(&mut archive)?;
         let source = source_contents.format;
         let target = Format::for_destination(destination)?;
         let manifest = self.manifest.for_save();
-        if target == Format::Prg
-            && (!self.archived_history.workflows.is_empty() || !self.manifest.extensions.is_empty())
-        {
-            return Err("项目含协作历史或扩展信息，请保存为 .mio 以保留完整内容".into());
-        }
         let mut stage = Vec::new();
         archive.by_name(source.stage())?.read_to_end(&mut stage)?;
         let mut value = rmpv::decode::read_value(&mut Cursor::new(stage))?;
@@ -1765,11 +1749,7 @@ impl Document {
                 {
                     continue;
                 }
-                let name = if source == Format::Prg {
-                    format!("{}{name}", project::LEGACY_PREFIX)
-                } else {
-                    name.to_owned()
-                };
+                let name = name.to_owned();
                 project::validate_entry_name(&name)?;
                 if crate::project_package::managed(&name) {
                     return Err("旧扩展占用新格式保留路径，未覆盖原文件".into());
@@ -1846,17 +1826,7 @@ impl Document {
                     {
                         continue;
                     }
-                    let name = match (source, target) {
-                        (Format::Prg, Format::Mio) => {
-                            format!("{}{name}", project::LEGACY_PREFIX, name = file.name())
-                        }
-                        (Format::Mio, Format::Prg) => file
-                            .name()
-                            .strip_prefix(project::LEGACY_PREFIX)
-                            .ok_or("项目包含 PRG 无法保留的扩展，请保存为 .mio")?
-                            .to_owned(),
-                        _ => file.name().to_owned(),
-                    };
+                    let name = file.name().to_owned();
                     if target == Format::Mio {
                         project::validate_entry_name(&name)?;
                         if crate::project_package::managed(&name) {
@@ -2510,7 +2480,7 @@ fn serialized_path<'a>(stage: &'a Value, path: &str) -> Result<&'a Value> {
             Value::Map(_) => field(value, part),
             _ => None,
         }
-        .ok_or_else(|| format!("PRG 引用路径不存在：{path}"))?;
+        .ok_or_else(|| format!("画布引用路径不存在：{path}"))?;
     }
     Ok(value)
 }
@@ -2563,7 +2533,7 @@ fn prune_deleted_stage(stage: &Value, deleted: &HashSet<&str>) -> Result<Value> 
     ) -> Result<Option<Value>> {
         if let Some(path) = field(value, "$").and_then(Value::as_str) {
             if !active.insert(path.to_owned()) {
-                return Err("匿名 PRG 引用存在循环".into());
+                return Err("匿名画布引用存在循环".into());
             }
             let result = convert(
                 serialized_path(stage, path)?,
@@ -2855,7 +2825,7 @@ mod tests {
         let group = document.create_group(&HashSet::from([text])).unwrap();
         document.nodes[group].font_size = 22.0;
         let id = document.nodes[group].id.clone();
-        let path = directory.path().join("group.prg");
+        let path = directory.path().join("group.mio");
         document.save(&path).unwrap();
         let restored = Document::open(&path).unwrap();
         assert_eq!(
@@ -2883,7 +2853,7 @@ mod tests {
         assert_eq!(doc.edges[0].arc_offset, -123.5);
         assert_eq!(doc.edges[0].text_position, 0.3);
         doc.edit_edge(0, "弧线标题".into(), false).unwrap();
-        let path = dir.path().join("arc.prg");
+        let path = dir.path().join("arc.mio");
         doc.save(&path).unwrap();
         assert!(same_edges(&doc, &Document::open(&path).unwrap()));
         assert_eq!(
@@ -2894,7 +2864,7 @@ mod tests {
         clipboard.copy(&doc, &HashSet::from([0, 1])).unwrap();
         let mut target = Document::blank().unwrap();
         clipboard.paste(&mut target, [500.0, 200.0]).unwrap();
-        let path = dir.path().join("arc-copy.prg");
+        let path = dir.path().join("arc-copy.mio");
         target.save(&path).unwrap();
         assert!(same_edges(&target, &Document::open(&path).unwrap()));
     }
@@ -2914,7 +2884,7 @@ mod tests {
         doc.nodes[0].rect[1] -= 12.0;
         doc.finish();
         let moved = doc.nodes.clone();
-        let path = dir.path().join("moved.prg");
+        let path = dir.path().join("moved.mio");
         doc.save(&path).unwrap();
         let file = ProjectFile::load(&path).unwrap();
         let pen = file.objects()["pen"];
@@ -2935,7 +2905,7 @@ mod tests {
         let pasted = copy.nodes.clone();
         assert_eq!(pasted[0].stroke, before[0].stroke);
         assert_ne!(pasted[0].id, before[0].id);
-        let copy_path = dir.path().join("copy.prg");
+        let copy_path = dir.path().join("copy.mio");
         copy.save(&copy_path).unwrap();
         assert!(same_nodes(
             &pasted,
@@ -2956,7 +2926,7 @@ mod tests {
             doc.nodes[0].url.as_deref(),
             Some("https://example.com/中文?q=1&x=2")
         );
-        let path = dir.path().join("url.prg");
+        let path = dir.path().join("url.mio");
         doc.save(&path).unwrap();
         assert!(same_nodes(
             &doc.nodes,
@@ -2967,8 +2937,8 @@ mod tests {
         let mut copy = Document::blank().unwrap();
         clipboard.paste(&mut copy, [100.0; 2]).unwrap();
         assert_eq!(copy.nodes[0].url, doc.nodes[0].url);
-        copy.save(&dir.path().join("url-copy.prg")).unwrap();
-        let file = ProjectFile::load(&dir.path().join("url-copy.prg")).unwrap();
+        copy.save(&dir.path().join("url-copy.mio")).unwrap();
+        let file = ProjectFile::load(&dir.path().join("url-copy.mio")).unwrap();
         assert_eq!(file.objects()[&copy.nodes[0].id]["title"], "示例网站");
         assert_eq!(
             file.objects()[&copy.nodes[0].id]["url"],
@@ -2981,9 +2951,9 @@ mod tests {
         copy.begin("更新网址");
         copy.nodes[0].url = Some("https://example.org/new".into());
         copy.finish();
-        copy.save(&dir.path().join("url-copy.prg")).unwrap();
+        copy.save(&dir.path().join("url-copy.mio")).unwrap();
         assert_eq!(
-            Document::open(&dir.path().join("url-copy.prg"))
+            Document::open(&dir.path().join("url-copy.mio"))
                 .unwrap()
                 .nodes[0]
                 .url
@@ -3003,7 +2973,7 @@ mod tests {
         assert_eq!(doc.nodes[group].rect, original.rect);
         assert_eq!(doc.nodes[group].children, original.children);
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("renamed.prg");
+        let path = dir.path().join("renamed.mio");
         doc.save(&path).unwrap();
         assert_eq!(
             Document::open(&path)
@@ -3048,7 +3018,7 @@ mod tests {
         assert_eq!(doc.nodes[0].font_size, 37.5);
         assert!(!doc.nodes[0].auto_size);
         assert_eq!(doc.nodes[0].text, before[0].text);
-        let path = dir.path().join("properties.prg");
+        let path = dir.path().join("properties.mio");
         doc.save(&path).unwrap();
         assert!(same_nodes(
             &doc.nodes,
@@ -3088,7 +3058,7 @@ mod tests {
             doc.edges[0].rates,
             original.rates.iter().copied().rev().collect::<Vec<_>>()
         );
-        let path = dir.path().join("edge-edit.prg");
+        let path = dir.path().join("edge-edit.mio");
         doc.save(&path).unwrap();
         assert!(same_edges(&doc, &Document::open(&path).unwrap()));
         doc.undo();
@@ -3135,7 +3105,7 @@ mod tests {
         doc.redo();
         assert!(doc.nodes[group].children.contains(&id));
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("images.prg");
+        let path = dir.path().join("images.mio");
         doc.save(&path).unwrap();
         let restored = Document::open(&path).unwrap();
         assert_eq!(restored.attachments[&name], bytes);
@@ -3196,7 +3166,7 @@ mod tests {
     #[test]
     fn new_draft_can_save_edit_and_reopen_without_a_source_file() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("draft.prg");
+        let path = dir.path().join("draft.mio");
         let mut doc = Document::blank().unwrap();
         doc.save(&path).unwrap();
         assert!(Document::open(&path).unwrap().nodes.is_empty());
@@ -3227,10 +3197,13 @@ mod tests {
         document_from_stage(dir, &stage)
     }
     fn document_from_stage(dir: &Path, stage: &serde_json::Value) -> Document {
-        let path = dir.join("original.prg");
+        let path = dir.join("original.mio");
         let mut archive = zip::ZipWriter::new(fs::File::create(&path).unwrap());
         archive
-            .start_file("stage.msgpack", zip::write::SimpleFileOptions::default())
+            .start_file(
+                Format::Mio.stage(),
+                zip::write::SimpleFileOptions::default(),
+            )
             .unwrap();
         archive
             .write_all(&rmp_serde::to_vec_named(&stage).unwrap())
@@ -3239,6 +3212,28 @@ mod tests {
             .start_file("unknown.bin", zip::write::SimpleFileOptions::default())
             .unwrap();
         archive.write_all(&[0, 255, 4, 128]).unwrap();
+        archive
+            .start_file(
+                project::MANIFEST_ENTRY,
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        serde_json::to_writer(
+            &mut archive,
+            &Manifest {
+                schema_version: 1,
+                required_features: vec![],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        archive
+            .start_file(
+                project::HISTORY_ENTRY,
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        serde_json::to_writer(&mut archive, &History::<String>::default()).unwrap();
         archive.finish().unwrap();
         Document::open(&path).unwrap()
     }
@@ -3279,7 +3274,7 @@ mod tests {
             assert_eq!(node.children, before.children);
         }
         assert_eq!(doc.edges, edges);
-        let path = dir.path().join("collapsed.prg");
+        let path = dir.path().join("collapsed.mio");
         doc.save(&path).unwrap();
         let reopened = Document::open(&path).unwrap();
         assert!(same_nodes(&doc.nodes, &reopened.nodes));
@@ -3412,7 +3407,7 @@ mod tests {
         let index = doc.create_text_node([300.0, -200.0]).unwrap();
         doc.undo();
         doc.redo();
-        doc.save(&dir.path().join("before-layout.prg")).unwrap();
+        doc.save(&dir.path().join("before-layout.mio")).unwrap();
         let history_len = doc.history.len();
         assert!(doc.apply_layout_size(index, [100.0, 96.0]));
         assert_eq!(doc.nodes[index].rect, [250.0, -248.0, 100.0, 96.0]);
@@ -3427,7 +3422,7 @@ mod tests {
             assert_eq!(doc.nodes[index], measured);
             assert!(!doc.apply_layout_size(index, [100.0, 96.0]));
         }
-        doc.save(&dir.path().join("after-layout.prg")).unwrap();
+        doc.save(&dir.path().join("after-layout.mio")).unwrap();
         assert!(same_nodes(
             &Document::open(doc.path.as_ref().unwrap()).unwrap().nodes,
             &doc.nodes
@@ -3497,7 +3492,7 @@ mod tests {
         assert!(doc.nodes[inner].children.contains(&doc.nodes[index].id));
         assert!(!doc.nodes[outer].children.contains(&doc.nodes[index].id));
         let after = doc.nodes.clone();
-        let path = dir.path().join("nested-create.prg");
+        let path = dir.path().join("nested-create.mio");
         doc.save(&path).unwrap();
         let reopened = Document::open(&path).unwrap();
         assert!(same_nodes(&doc.nodes, &reopened.nodes));
@@ -3534,7 +3529,7 @@ mod tests {
             assert_eq!(doc.nodes[outer].children.contains(&id), !collapse_outer);
             assert_eq!(doc.section_representatives().unwrap()[index], index);
             let after = doc.nodes.clone();
-            let path = dir.path().join("collapsed-create.prg");
+            let path = dir.path().join("collapsed-create.mio");
             doc.save(&path).unwrap();
             let reopened = Document::open(&path).unwrap();
             assert!(same_nodes(&doc.nodes, &reopened.nodes));
@@ -3552,7 +3547,7 @@ mod tests {
         let original_stage = ProjectFile::load(doc.path.as_ref().unwrap()).unwrap().stage;
         let original_nodes = doc.nodes.clone();
         let original_edges = doc.edges.clone();
-        let path = dir.path().join("new-text.prg");
+        let path = dir.path().join("new-text.mio");
         let index = doc.create_text_node([500.0, 400.0]).unwrap();
         let id = doc.nodes[index].id.clone();
         doc.save(&path).unwrap();
@@ -3602,13 +3597,7 @@ mod tests {
         assert_eq!(doc.edges, original_edges);
         assert_eq!(ProjectFile::load(&path).unwrap().stage, original_stage);
         assert!(!doc.history.can_undo());
-        let mut archive = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
-        let mut unknown = vec![];
-        archive
-            .by_name("unknown.bin")
-            .unwrap()
-            .read_to_end(&mut unknown)
-            .unwrap();
+        let unknown = crate::project_sqlite::load(&path).unwrap().extensions["unknown.bin"].clone();
         assert_eq!(unknown, [0, 255, 4, 128]);
         doc.redo();
         assert_eq!(doc.nodes[index].id, id);
@@ -3650,7 +3639,7 @@ mod tests {
             std::slice::from_ref(&source_id)
         );
         let grouped = doc.nodes.clone();
-        let path = dir.path().join("automatic-group.prg");
+        let path = dir.path().join("automatic-group.mio");
         doc.save(&path).unwrap();
         let mut reopened = Document::open(&path).unwrap();
         assert!(same_nodes(&reopened.nodes, &grouped));
@@ -3814,13 +3803,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut doc = section_document(dir.path());
         let group = doc.create_group(&HashSet::from([1])).unwrap();
-        let baseline = dir.path().join("before-jump.prg");
+        let baseline = dir.path().join("before-jump.mio");
         doc.save(&baseline).unwrap();
         let before = doc.nodes.clone();
         let edges = doc.edges.clone();
         doc.jump_selection(&HashSet::from([0]), Some(group), [300.0, 400.0])
             .unwrap();
-        let output = dir.path().join("jumped.prg");
+        let output = dir.path().join("jumped.mio");
         for _ in 0..2 {
             doc.save(&output).unwrap();
             let saved = Document::open(&output).unwrap();
@@ -3828,13 +3817,8 @@ mod tests {
             assert!(same_edges(&saved, &doc));
             let file = ProjectFile::load(&output).unwrap();
             assert_eq!(file.objects()["outer"]["unknown"]["preserve"], true);
-            let mut archive = zip::ZipArchive::new(fs::File::open(&output).unwrap()).unwrap();
-            let mut bytes = vec![];
-            archive
-                .by_name("unknown.bin")
-                .unwrap()
-                .read_to_end(&mut bytes)
-                .unwrap();
+            let bytes =
+                crate::project_sqlite::load(&output).unwrap().extensions["unknown.bin"].clone();
             assert_eq!(bytes, [0, 255, 4, 128]);
         }
         assert_eq!(doc.edges, edges);
@@ -3897,7 +3881,7 @@ mod tests {
         let original = ProjectFile::load(doc.path.as_ref().unwrap()).unwrap().stage;
         let group = doc.create_group(&HashSet::from([0])).unwrap();
         let group_id = doc.nodes[group].id.clone();
-        let output = dir.path().join("grouped.prg");
+        let output = dir.path().join("grouped.mio");
         for _ in 0..2 {
             doc.save(&output).unwrap();
             let saved = ProjectFile::load(&output).unwrap();
@@ -3923,13 +3907,7 @@ mod tests {
         let loaded = Document::open(&output).unwrap();
         assert!(same_nodes(&loaded.nodes, &doc.nodes));
         assert!(same_edges(&loaded, &doc));
-        let mut archive = zip::ZipArchive::new(fs::File::open(output).unwrap()).unwrap();
-        let mut bytes = vec![];
-        archive
-            .by_name("unknown.bin")
-            .unwrap()
-            .read_to_end(&mut bytes)
-            .unwrap();
+        let bytes = crate::project_sqlite::load(&output).unwrap().extensions["unknown.bin"].clone();
         assert_eq!(bytes, [0, 255, 4, 128]);
     }
     #[test]
@@ -3937,7 +3915,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut initial = small_document(dir.path());
         initial.create_group(&HashSet::from([0, 1])).unwrap();
-        let output = dir.path().join("grouped.prg");
+        let output = dir.path().join("grouped.mio");
         initial.save(&output).unwrap();
         let before = ProjectFile::load(&output).unwrap().stage;
         let mut reopened = Document::open(&output).unwrap();
@@ -3995,7 +3973,7 @@ mod tests {
             .unwrap();
         assert!(doc.edges.is_empty());
         assert_eq!(doc.nodes, before);
-        let output = dir.path().join("cut-edge.prg");
+        let output = dir.path().join("cut-edge.mio");
         doc.save(&output).unwrap();
         let loaded = Document::open(&output).unwrap();
         assert_eq!(loaded.nodes, before);
@@ -4037,7 +4015,7 @@ mod tests {
         assert_eq!(doc.edges[0].members, [0, 1]);
         assert_eq!(doc.counts["TextNode"], counts["TextNode"] - 1);
         assert_eq!(doc.counts["LineEdge"], counts["LineEdge"] - 1);
-        let output = dir.path().join("cut-node.prg");
+        let output = dir.path().join("cut-node.mio");
         doc.save(&output).unwrap();
         let saved = ProjectFile::load(&output).unwrap();
         let objects = saved.objects();
@@ -4078,13 +4056,13 @@ mod tests {
             .unwrap();
         assert_eq!(doc.nodes.len(), 2);
         assert_eq!(doc.edges.len(), 1);
-        let output = dir.path().join("ungrouped.prg");
+        let output = dir.path().join("ungrouped.mio");
         doc.save(&output).unwrap();
         let loaded = Document::open(&output).unwrap();
         assert!(same_nodes(&loaded.nodes, &doc.nodes));
         assert!(same_edges(&loaded, &doc));
         doc.undo();
-        let mut stage = ProjectFile::load(&dir.path().join("original.prg"))
+        let mut stage = ProjectFile::load(&dir.path().join("original.mio"))
             .unwrap()
             .stage;
         stage[4]["isCollapsed"] = true.into();
@@ -4233,7 +4211,7 @@ mod tests {
         let mut doc = small_document(dir.path());
         assert!(doc.edit_text("node-a", "自动尺寸文字".into(), [300.0, 150.0]));
         assert!(doc.edit_text("node-b", "固定宽度文字".into(), [100.0, 200.0]));
-        let path = dir.path().join("layout.prg");
+        let path = dir.path().join("layout.mio");
         doc.save(&path).unwrap();
         let saved = ProjectFile::load(&path).unwrap();
         let objects = saved.objects();
@@ -4313,7 +4291,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut doc = small_document(dir.path());
         let original = ProjectFile::load(doc.path.as_ref().unwrap()).unwrap().stage;
-        let path = dir.path().join("added.prg");
+        let path = dir.path().join("added.mio");
         let mut edge = new_edge();
         edge.arrow = false;
         doc.add_edge(edge).unwrap();
@@ -4330,12 +4308,8 @@ mod tests {
             assert_eq!(items[4]["color"]["_"], "Color");
             let loaded = Graph::from_file(saved).unwrap();
             assert!(same_edges(&loaded, &doc.graph));
-            let mut zip = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
-            let mut unknown = vec![];
-            zip.by_name("unknown.bin")
-                .unwrap()
-                .read_to_end(&mut unknown)
-                .unwrap();
+            let unknown =
+                crate::project_sqlite::load(&path).unwrap().extensions["unknown.bin"].clone();
             assert_eq!(unknown, [0, 255, 4, 128]);
         }
         doc.undo();
@@ -4352,10 +4326,30 @@ mod tests {
     }
     fn tutorial() -> Document {
         Document::open(
-            &Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("fixtures/tutorial-shortcut-keys-3.1-original.prg"),
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/tutorial-shortcut-keys.mio"),
         )
         .unwrap()
+    }
+
+    fn assert_saved_extensions(original: &[u8], path: &Path) {
+        let mut archive = zip::ZipArchive::new(Cursor::new(original)).unwrap();
+        let saved = crate::project_sqlite::load(path).unwrap();
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).unwrap();
+            if entry.name() == Format::Mio.stage()
+                || entry.name().starts_with(Format::Mio.assets())
+                || matches!(
+                    entry.name(),
+                    project::MANIFEST_ENTRY | project::HISTORY_ENTRY
+                )
+                || crate::project_package::managed(entry.name())
+            {
+                continue;
+            }
+            let mut bytes = vec![];
+            entry.read_to_end(&mut bytes).unwrap();
+            assert_eq!(saved.extensions[entry.name()], bytes);
+        }
     }
     #[test]
     #[ignore = "requires pinned tutorial from run.sh"]
@@ -4366,7 +4360,7 @@ mod tests {
         let original_edges = doc.edges.clone();
         let original_archive = doc.archive.clone().unwrap();
         let dir = tempfile::tempdir().unwrap();
-        let output = dir.path().join("cut-tutorial.prg");
+        let output = dir.path().join("cut-tutorial.mio");
         let edges: HashSet<_> = (0..doc.edges.len()).collect();
         let edge_plan = doc.deletion_plan(&HashSet::new(), &edges).unwrap();
         doc.delete_objects(&HashSet::new(), &edges).unwrap();
@@ -4396,24 +4390,7 @@ mod tests {
         doc.undo();
         doc.save(&output).unwrap();
         assert_eq!(ProjectFile::load(&output).unwrap().stage, original_stage);
-        let mut original = zip::ZipArchive::new(Cursor::new(original_archive)).unwrap();
-        let mut saved = zip::ZipArchive::new(fs::File::open(output).unwrap()).unwrap();
-        assert_eq!(original.len(), saved.len());
-        for index in 0..original.len() {
-            let mut entry = original.by_index(index).unwrap();
-            if entry.name() == "stage.msgpack" {
-                continue;
-            }
-            let mut before = vec![];
-            let mut after = vec![];
-            entry.read_to_end(&mut before).unwrap();
-            saved
-                .by_name(entry.name())
-                .unwrap()
-                .read_to_end(&mut after)
-                .unwrap();
-            assert_eq!(before, after);
-        }
+        assert_saved_extensions(&original_archive, &output);
     }
     #[test]
     #[ignore = "requires pinned tutorial from run.sh"]
@@ -4435,7 +4412,7 @@ mod tests {
         assert_eq!(selection.len(), 4);
         let selected_ids: HashSet<_> = selection.iter().map(|&i| doc.nodes[i].id.clone()).collect();
         let dir = tempfile::tempdir().unwrap();
-        let baseline = dir.path().join("refreshed.prg");
+        let baseline = dir.path().join("refreshed.mio");
         doc.save(&baseline).unwrap();
         let baseline_stage = ProjectFile::load(&baseline).unwrap().stage;
         let group = doc.create_group(&selection).unwrap();
@@ -4455,43 +4432,21 @@ mod tests {
             assert!(bounds[0] + bounds[2] >= member[0] + member[2]);
             assert!(bounds[1] + bounds[3] >= member[1] + member[3]);
         }
-        let grouped = dir.path().join("alignment-group.prg");
+        let grouped = dir.path().join("alignment-group.mio");
         doc.save(&grouped).unwrap();
         let loaded = Document::open(&grouped).unwrap();
         assert!(same_nodes(&loaded.nodes, &doc.nodes));
         assert!(same_edges(&loaded, &doc));
         doc.undo();
         assert!(same_nodes(&doc.nodes, &before));
-        let restored = dir.path().join("undo-group.prg");
+        let restored = dir.path().join("undo-group.mio");
         doc.save(&restored).unwrap();
         let loaded = Document::open(&restored).unwrap();
         assert!(same_nodes(&loaded.nodes, &before));
         assert!(same_edges(&loaded, &doc));
         assert_eq!(ProjectFile::load(&restored).unwrap().stage, baseline_stage);
         for path in [&grouped, &restored] {
-            let mut original = zip::ZipArchive::new(Cursor::new(&original_archive)).unwrap();
-            let mut saved = zip::ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
-            assert_eq!(original.len(), saved.len());
-            for index in 0..original.len() {
-                let mut entry = original.by_index(index).unwrap();
-                if entry.name() == "stage.msgpack" {
-                    continue;
-                }
-                let mut original_bytes = vec![];
-                let mut saved_bytes = vec![];
-                entry.read_to_end(&mut original_bytes).unwrap();
-                saved
-                    .by_name(entry.name())
-                    .unwrap()
-                    .read_to_end(&mut saved_bytes)
-                    .unwrap();
-                assert_eq!(
-                    original_bytes,
-                    saved_bytes,
-                    "archive entry {} changed",
-                    entry.name()
-                );
-            }
+            assert_saved_extensions(&original_archive, path);
         }
     }
     #[test]
@@ -4518,39 +4473,23 @@ mod tests {
         doc.redo();
         assert_eq!(doc.nodes, after);
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("roundtrip.prg");
+        let path = dir.path().join("roundtrip.mio");
         doc.save(&path).unwrap();
         assert!(!doc.dirty());
         let loaded = Document::open(&path).unwrap();
         assert!(same_nodes(&loaded.nodes, &after));
-        let mut a = zip::ZipArchive::new(Cursor::new(doc.archive.as_ref().unwrap())).unwrap();
-        let mut b = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
-        assert_eq!(a.len(), b.len());
-        for i in 0..a.len() {
-            let mut entry = a.by_index(i).unwrap();
-            if entry.name() == "stage.msgpack" {
-                continue;
-            }
-            let mut x = vec![];
-            let mut y = vec![];
-            entry.read_to_end(&mut x).unwrap();
-            b.by_name(entry.name())
-                .unwrap()
-                .read_to_end(&mut y)
-                .unwrap();
-            assert_eq!(x, y);
-        }
+        assert_saved_extensions(doc.archive.as_ref().unwrap(), &path);
         fs::write(&path, b"external modification").unwrap();
         doc.begin("unsaved move");
         doc.nodes[index].rect[0] += 10.0;
         doc.finish();
         assert!(doc.save(&path).is_err());
-        let alias = dir.path().join(".").join("roundtrip.prg");
+        let alias = dir.path().join(".").join("roundtrip.mio");
         assert!(doc.save(&alias).is_err());
         assert_eq!(fs::read(&path).unwrap(), b"external modification");
         assert!(doc.dirty());
         assert!(
-            doc.save(&dir.path().join("missing-parent/fail.prg"))
+            doc.save(&dir.path().join("missing-parent/fail.mio"))
                 .is_err()
         );
         assert!(doc.dirty());
@@ -4558,8 +4497,8 @@ mod tests {
     #[test]
     fn recovery_snapshots_preserve_save_point_source_and_conflict_detection() {
         let dir = tempfile::tempdir().unwrap();
-        let source = dir.path().join("source.prg");
-        let snapshot = dir.path().join("recovery.prg");
+        let source = dir.path().join("source.mio");
+        let snapshot = dir.path().join("recovery.mio");
         let mut doc = Document::blank().unwrap();
         doc.save(&source).unwrap();
         let original = fs::read(&source).unwrap();
@@ -4581,7 +4520,7 @@ mod tests {
         doc.redo();
         assert!(doc.dirty());
         fs::write(&source, b"external edit").unwrap();
-        doc.save_snapshot(&dir.path().join("second.prg")).unwrap();
+        doc.save_snapshot(&dir.path().join("second.mio")).unwrap();
         assert!(doc.save(&source).is_err());
         assert_eq!(fs::read(&source).unwrap(), b"external edit");
         assert!(doc.dirty());
@@ -4592,14 +4531,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut doc = Document::blank().unwrap();
         doc.create_text_node([0.0; 2]).unwrap();
-        let path = dir.path().join("draft.prg");
+        let path = dir.path().join("draft.mio");
         doc.begin("moving");
         doc.nodes[0].rect[0] += 10.0;
         assert!(doc.save_snapshot(&path).is_err());
         assert!(!path.exists());
         doc.finish();
         assert!(
-            doc.save_snapshot(&dir.path().join("missing/draft.prg"))
+            doc.save_snapshot(&dir.path().join("missing/draft.mio"))
                 .is_err()
         );
         doc.save_snapshot(&path).unwrap();
@@ -4614,7 +4553,7 @@ mod tests {
     #[test]
     fn project_bytes_decode_one_snapshot_after_the_disk_file_changes() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("snapshot.prg");
+        let path = directory.path().join("snapshot.mio");
         let mut document = Document::blank().unwrap();
         document.create_text_node([10.0, 20.0]).unwrap();
         document
@@ -4635,7 +4574,7 @@ mod tests {
         let current = Document::open(&path).unwrap();
         assert_eq!(current.nodes.len(), 2);
         assert_eq!(current.attachments["source.txt"], b"changed");
-        assert_eq!(current.archive.as_ref(), current.disk_bytes.as_ref());
+        assert_ne!(current.archive.as_ref(), current.disk_bytes.as_ref());
         assert!(ProjectFile::from_bytes(&bytes[..bytes.len() / 2]).is_err());
     }
 
@@ -4651,7 +4590,10 @@ mod tests {
             .unwrap();
         let mut extra = zip::ZipWriter::new_append(file).unwrap();
         extra
-            .start_file("manifest.json", zip::write::SimpleFileOptions::default())
+            .start_file(
+                "extensions/producer.json",
+                zip::write::SimpleFileOptions::default(),
+            )
             .unwrap();
         extra
             .write_all(br#"{"format":"third-party-extension"}"#)
@@ -4674,24 +4616,18 @@ mod tests {
         let path = directory.path().join("新项目.mio");
         document.save(&path).unwrap();
         assert_eq!(
-            fs::read(directory.path().join("original.prg")).unwrap(),
+            fs::read(directory.path().join("original.mio")).unwrap(),
             original
         );
 
         assert!(crate::project_sqlite::is_database(&path).unwrap());
         let saved = crate::project_sqlite::load(&path).unwrap();
         assert_eq!(
-            saved.extensions["extensions/legacy/manifest.json"],
+            saved.extensions["extensions/producer.json"],
             br#"{"format":"third-party-extension"}"#
         );
-        assert_eq!(
-            saved.extensions["extensions/legacy/canvas/notes.bin"],
-            b"opaque legacy data"
-        );
-        assert_eq!(
-            saved.extensions["extensions/legacy/unknown.bin"],
-            [0, 255, 4, 128]
-        );
+        assert_eq!(saved.extensions["canvas/notes.bin"], b"opaque legacy data");
+        assert_eq!(saved.extensions["unknown.bin"], [0, 255, 4, 128]);
         assert_eq!(saved.file.attachments["image.png"], [0, 255, 1]);
 
         // An older producer supplies v1 metadata and opaque extensions. Saving
@@ -4747,10 +4683,7 @@ mod tests {
         assert_eq!(again.manifest, document.manifest);
         let saved = crate::project_sqlite::load(&copy).unwrap();
         assert_eq!(saved.extensions["extensions/future/data.bin"], [7, 0, 128]);
-        assert_eq!(
-            saved.extensions["extensions/legacy/unknown.bin"],
-            [0, 255, 4, 128]
-        );
+        assert_eq!(saved.extensions["unknown.bin"], [0, 255, 4, 128]);
         let parsed = ProjectFile::load(&path).unwrap();
         assert_eq!(
             parsed.objects()["original-edge"]["unknown"],

@@ -367,8 +367,7 @@ fn enclosing_marquee_selects_existing_group_without_hijacking_inner_selection() 
 fn select_all_then_group_preserves_tutorial_groups_and_connections() {
     let (mut app, _, _) = app(1.75, true);
     let doc = Document::open(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("fixtures/tutorial-shortcut-keys-3.1-original.prg"),
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/tutorial-shortcut-keys.mio"),
     )
     .unwrap();
     let before = doc.nodes.clone();
@@ -421,7 +420,7 @@ fn select_all_then_group_preserves_tutorial_groups_and_connections() {
         assert_eq!(node.children, old.children);
     }
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("grouped.prg");
+    let file = dir.path().join("grouped.mio");
     scene.0.save(&file).unwrap();
     let saved = Document::open(&file).unwrap();
     for node in &scene.0.nodes {

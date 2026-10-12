@@ -1,5 +1,5 @@
 //! UI-independent command surface for the React/Tauri migration prototype.
-//! Document remains the sole owner of edits, history and PRG persistence.
+//! Document remains the sole owner of edits, history and MIO persistence.
 use crate::document::Document;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -188,7 +188,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn commands_round_trip_through_existing_prg_and_history() {
+    fn commands_round_trip_through_existing_mio_and_history() {
         let mut session = Session::new().unwrap();
         let snapshot = session
             .execute(Command::AddText { x: 0.0, y: 0.0 })
@@ -212,7 +212,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory
             .path()
-            .join("中文.prg")
+            .join("中文.mio")
             .to_string_lossy()
             .into_owned();
         assert!(
@@ -245,7 +245,7 @@ mod tests {
                 .execute(Command::Open {
                     path: directory
                         .path()
-                        .join("missing.prg")
+                        .join("missing.mio")
                         .to_string_lossy()
                         .into_owned(),
                     discard: true,

@@ -95,7 +95,7 @@ export function App() {
     if (unsaved && !await discard('当前画布尚未保存。继续将放弃更改。')) return;
     if (kind === 'new') await command({ type: 'new', discard: true });
     else {
-      const path = await open({ multiple: false, filters: [{ name: 'Ravomi 项目与兼容画布', extensions: ['mio', 'prg'] }] });
+      const path = await open({ multiple: false, filters: [{ name: 'Ravomi 项目 (.mio)', extensions: ['mio'] }] });
       if (!path) return;
       await command({ type: 'open', path, discard: true });
     }
@@ -111,8 +111,8 @@ export function App() {
   async function saveDocument(copy: boolean) {
     await applyDraft();
     const path = !copy && document.path ? document.path : await save({
-      defaultPath: document.path?.replace(/\.prg$/i, '.mio') ?? '未命名项目.mio',
-      filters: [{ name: 'Ravomi 项目 (.mio)', extensions: ['mio'] }, { name: '兼容画布 (.prg)', extensions: ['prg'] }],
+      defaultPath: document.path ?? '未命名项目.mio',
+      filters: [{ name: 'Ravomi 项目 (.mio)', extensions: ['mio'] }],
     });
     if (!path) return;
     await command({ type: 'save', path });

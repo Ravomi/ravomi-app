@@ -19,7 +19,7 @@ from urllib.request import Request, urlopen
 
 def main():
     binary = str(Path(sys.argv[1]).resolve(strict=True))
-    fixture = str(Path("fixtures/tutorial-shortcut-keys-3.1-original.prg").resolve(strict=True))
+    fixture = str(Path("fixtures/tutorial-shortcut-keys.mio").resolve(strict=True))
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]

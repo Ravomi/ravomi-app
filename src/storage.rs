@@ -1,7 +1,6 @@
 //! Shared storage names and native file replacement.
 //!
-//! PRG identifiers and the legacy state directory remain stable for existing
-//! documents and installations; these constants do not introduce a new format.
+//! The legacy state directory remains stable for existing installations.
 use crate::Result;
 use std::{
     ffi::OsStr,
@@ -9,16 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const PRG_EXTENSION: &str = "prg";
-pub const PRG_MIME: &str = "application/vnd.project-graph";
 pub const STAGE_ENTRY: &str = "stage.msgpack";
-pub const METADATA_ENTRY: &str = "metadata.msgpack";
-pub const TAGS_ENTRY: &str = "tags.msgpack";
-pub const REFERENCE_ENTRY: &str = "reference.msgpack";
-pub const ATTACHMENTS_PREFIX: &str = "attachments/";
-pub const LEGACY_DOCUMENT_VERSION: &str = "2.3.0";
 pub const RECOVERY_DOCUMENT_NAME: &str = "document.mio";
-pub const LEGACY_RECOVERY_DOCUMENT_NAME: &str = "document.prg";
 pub const RECOVERY_ENTRY_NAME: &str = "entry.json";
 pub const RECOVERY_SETTINGS_NAME: &str = "settings.json";
 pub const RECENT_FILE_NAME: &str = "recent.json";

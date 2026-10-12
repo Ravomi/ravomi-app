@@ -244,7 +244,7 @@ mod tests {
         assert!(doc.nodes.is_empty());
         doc.redo();
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("svg.prg");
+        let path = directory.path().join("svg.mio");
         doc.save(&path).unwrap();
         let reopened = Document::open(&path).unwrap();
         assert_eq!(reopened.attachments[&attachment], source.as_bytes());
@@ -343,7 +343,7 @@ mod tests {
         assert!(doc.nodes.is_empty());
         doc.redo();
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("clipboard.prg");
+        let path = directory.path().join("clipboard.mio");
         doc.save(&path).unwrap();
         let reopened = Document::open(&path).unwrap();
         let image = image::load_from_memory(&reopened.attachments[&name])

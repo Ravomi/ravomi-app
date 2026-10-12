@@ -8,7 +8,7 @@ Ravomi 是 Arcraven 的多 Agent 画布工作空间。产品目标是在无限�
 
 全平台应用的迁移入口已经位于 `app/`（React + Tauri + Rust），运行与验证见 [app/README.md](app/README.md)；“全平台”是目标，并非各平台均已验收。下面的 Bevy 说明仍适用于已实现的原生画布基线；`./run.sh` 保持启动该基线。新 Tauri crate 通过 `default-features = false` 复用 Rust 文档库，不在新窗口中加载 Bevy。
 
-同窗口 React 文字编辑使用独立入口 `./app/run-canvas.sh 文件.prg`：原生 Bevy 画布通过 Wry 子 WebView 承载输入层，Linux 目前要求 X11/XWayland。先执行 `cd app && npm ci`。手动构建 `--features react-editor` 前必须运行 `npm run build:canvas-editor`，生成的 bundle 不入库。详细边界和测试见 [app/README.md](app/README.md)。
+同窗口 React 文字编辑使用独立入口 `./app/run-canvas.sh 文件.mio`：原生 Bevy 画布通过 Wry 子 WebView 承载输入层，Linux 目前要求 X11/XWayland。先执行 `cd app && npm ci`。手动构建 `--features react-editor` 前必须运行 `npm run build:canvas-editor`，生成的 bundle 不入库。详细边界和测试见 [app/README.md](app/README.md)。
 
 工具浮层截图可在预览命令中追加 `--preview-tool search`、`--preview-tool properties`、`--preview-tool context` 或 `--preview-tool exit`，与 `--light`、`--ui-scale`、`--screenshot` 组合。属性与右键预览选中前四个节点，退出预览在内存中新建节点以触发未保存提示，不写入文件。这些入口仅用于复现控件布局，不替代真实输入操作验收。
 
@@ -18,11 +18,11 @@ Ravomi 是 Arcraven 的多 Agent 画布工作空间。产品目标是在无限�
 
 Ravomi 的 Rust/Bevy 画布架构以本地文档、ECS 场景、GPU 渲染和 egui 编辑界面为基础。源提交、目录对应和许可见 [迁移说明](MIGRATION.md)。代码协作位于 `src/collaboration/`，由 React/Tauri 的独立入口调用编译内置 Pi；其规划、调度、固定版本交接与审阅范围见 [应用说明](app/README.md)。Bevy 空间 Agent 尚未接入；继续实现时必须落实真实状态、上下文来源、结果查看与人工介入路径，不用装饰性 Agent 卡片代替执行模型。
 
-独立的 Rust/Bevy 画布性能原型，直接读取原版 ZIP + MessagePack `.prg`。使用用户指定的 [tutorial-shortcut-keys-3.1.prg](https://github.com/graphif/assets/blob/d9d945e549c9cd8a593ba3079d983e805d9c837c/tutorials/tutorial-shortcut-keys-3.1.prg)。完整解析嵌套对象和路径引用，按 UUID 去重：393 节点（345 文字、27 分组、21 连接点）、230 连线（227 有向、3 多端）、14 附件。附件不是全部都在画布中使用。
+历史性能原型曾使用 Project Graph 的 PRG 教程，测量记录保留在 `validation/`。当前仅打开 `.mio` 项目，不再读取 PRG；需要教程的可选回归使用本地 `fixtures/tutorial-shortcut-keys.mio`，夹具不随仓库分发。
 
 本机测试与性能结果见 [验证记录](VALIDATION.md)。
 
-Linux 文件管理器的 `.prg` 预览图使用独立离线工具，安装与验证见 [缩略图说明](packaging/linux/README.md)。
+Linux 文件管理器的 `.mio` 预览图使用独立离线工具，安装与验证见 [缩略图说明](packaging/linux/README.md)。
 
 ## Linux 性能诊断
 
@@ -46,7 +46,7 @@ cd /path/to/Ravomi
 直接打开其他原版文件：
 
 ```bash
-cargo run --release --locked -- /absolute/path/example.prg --font /path/to/font.ttf
+cargo run --release --locked -- /absolute/path/example.mio --font /path/to/font.ttf
 ```
 
 鼠标滚轮以鼠标位置为中心缩放；触控板双指滑动平移，双指捏合缩放（Linux 原生 Wayland 和 macOS）。Ctrl+双指滑动也可缩放；XWayland 暂不支持原生捏合，可使用这个替代操作。中键或空格+左键平移；空白处右键拖动切割；左键选中并拖动；Shift+点击增减选择；空白区域拖动框选，完整包住分组时包含分组框；Ctrl+A 和工具栏全选包含已有分组，整图再次分组保留嵌套成员；Escape 取消拖动；F 回到全图。
@@ -57,13 +57,13 @@ cargo run --release --locked -- /absolute/path/example.prg --font /path/to/font.
 
 滚动复用 Bevy MouseWheel；组合手势使用 Bevy 提供的 RawWinitWindowEvent，保留原事件顺序、窗口和 phase，避免拆开的 PinchGesture / PanGesture 丢失关联。直接引用的 winit 仍为依赖树中已锁定的 0.30.13，不增加新的版本或运行时库。Wayland 后端回移上游 pointer-gestures 并转发捏合中心位移，沿用已有连接；没有升级到与 Bevy 0.19.1 不兼容的 winit 0.31。来源、哈希、许可证和平台范围见 [补丁说明](vendor/winit/UPSTREAM-PATCH.md)。画布采用指数缩放响应；结束或取消时清除手势状态并保留当前视图。
 
-选中节点后按 Ctrl+G（macOS 为 Command+G），或点工具栏“分组”，创建包含所选节点的 Section。拖动标题或边框会连同成员一起移动，支持嵌套、撤销/重做、保存后重新打开。文字编辑和弹窗获得焦点时不触发画布分组快捷键。分组复用现有文档历史、UUID 和 PRG Section 数据格式，不增加通用分组依赖。
+选中节点后按 Ctrl+G（macOS 为 Command+G），或点工具栏“分组”，创建包含所选节点的 Section。拖动标题或边框会连同成员一起移动，支持嵌套、撤销/重做、保存后重新打开。文字编辑和弹窗获得焦点时不触发画布分组快捷键。分组复用现有文档历史、UUID 和 Section 数据模型，不增加通用分组依赖。
 
 选中节点后按住 Alt，在目标位置按下并松开左键：弧线和外框预览落点，绿色可放置、红色拒绝；落到已有分组会移入，落到空白会移到最外层。无选择时可 Alt+拖动节点选定并放置。成员保持相对位置，移动及归组共用一次撤销；Esc 取消，松开 Alt、切换空格平移或失焦结束预览。普通文字节点可接收子节点并转换为 Section，最后子节点移出时恢复文字节点；锁定节点和将组放入自身/后代会被拒绝。实现复用现有文档历史与 Lyon 曲线，参考 Godot 的 `entity_layer_mover.gd`。
 
 从节点上右键拖到另一节点创建有向连线；工具栏“连线”或按住 E+左键也可使用。边缘命中选择相应端口，中央命中自动裁切到节点边界。连线拖动不足 4 个逻辑像素、释放到空白、Esc 或窗口失焦会取消。每条新连线独立撤销/重做，保存时追加到原版舞台数据并保留附件、未知字段与原有引用。
 
-空白处按住右键，从起点拉出直线切割：红色预览标出受影响节点与连线，释放后删除，可一次撤销/重做。切割检测复用实际 Lyon 曲线路径，包含自环、并行偏移和多目标边。展开分组只切边框或标题，删除框时保留并提升成员；锁定分组及其后代受保护。Esc、窗口失焦或指针离开窗口取消未完成切割。删除保存会重建 PRG 引用并保留存活对象的未知字段、MessagePack 类型和 ZIP 附件。
+空白处按住右键，从起点拉出直线切割：预览切割线与受影响连线，释放后删除，可一次撤销/重做。切割检测复用实际 Lyon 曲线路径，包含自环、并行偏移和多目标边。展开分组只切边框或标题，删除框时保留并提升成员；锁定分组及其后代受保护。Esc、窗口失焦或指针离开窗口取消未完成切割。删除保存会重建画布引用并保留存活对象的未知字段和附件。
 
 既有 Bevy 编辑和移动反馈参考同一 master：进入编辑及按 Enter 完成出现短暂绿色扩散框；移动节点从后沿发出白色渐隐粒子；切割有交点闪光、收束刀光和裂开碎片。这是当前基线的实现说明；新界面按 [DESIGN](DESIGN.md) 收敛为短暂、局部、可中断的操作反馈，不能直接把历史特效作为新规范。现实现复用 Bevy `ColorMaterial`、Lyon 和标准库，所有瞬态图形共享一个 mesh，最多保留 512 个效果，结束后恢复按需刷新。刀光阴影使用多层半透明轮廓近似 Canvas 模糊，不承诺逐像素相同。
 
@@ -83,7 +83,7 @@ Bevy 外观已使用 Ravomi 暖白／石墨共享主题，画布背景不透明�
 
 报告记录帧间隔均值、p95/p99、物理固定步耗时、活动/休眠刚体、候选碰撞对/接触数、RSS、文字布局与 MSDF mesh 重建次数、生成字形数及图集占用。GPU/驱动信息见运行日志。窗口必须保持可见，不要在测量时编译或运行其他负载。帧间隔不是单独 GPU 执行时间，也不是输入延迟。
 
-`--no-ui` 关闭 egui 绘制；`--physics` 开启推挤并将最后阶段改为移动 8 个节点；`--edit-node INDEX` 聚焦指定文字节点并保持编辑框打开。`--synthetic 1000` / `5000` 生成内存测试图，可组合 `--long-text`、`--images`、`--dense`。合成图不支持 PRG 保存。完成 release 编译后，`bash benchmark/run-suite.sh` 串行执行十种配置、每种三次；不要同时运行多个测试窗口。`--preview --screenshot PATH` 在 MSDF 就绪后第 3 秒截图、第 4 秒退出，可配合 `--light --ui-scale 2` 做外观检查。
+`--no-ui` 关闭 egui 绘制；`--physics` 开启推挤并将最后阶段改为移动 8 个节点；`--edit-node INDEX` 聚焦指定文字节点并保持编辑框打开。`--synthetic 1000` / `5000` 生成内存测试图，可组合 `--long-text`、`--images`、`--dense`。合成图不支持文件保存。完成 release 编译后，`bash benchmark/run-suite.sh` 串行执行十种配置、每种三次；不要同时运行多个测试窗口。`--preview --screenshot PATH` 在 MSDF 就绪后第 3 秒截图、第 4 秒退出，可配合 `--light --ui-scale 2` 做外观检查。
 
 测速窗口禁止调整大小，但桌面的 HiDPI 缩放仍可能改变物理像素尺寸。报告的 `window` 字段记录实际物理尺寸，比较前必须核对。Linux X11/XWayland 下可使用 `env -u WAYLAND_DISPLAY WINIT_X11_SCALE_FACTOR=1 ./run.sh --benchmark --output results/bevy.json --screenshot results/bevy.png` 固定为 1 倍缩放。
 
@@ -100,7 +100,7 @@ Node >=22，默认使用 `/usr/bin/google-chrome`，可设置 `CHROME`。复用 
 
 支持教程中的节点位置、颜色、中文文本、分组外框、连接点、连线端点与文字。PNG/JPEG 解码复用 image，SVG 栅格化复用 resvg。未知节点/连线类型、缺失引用/附件会报错，避免静默遗漏。
 
-空白画布左键双击新建文字节点，默认内容为 `...`，选中新节点并显示短暂的白绿闪光。在分组内部新建时自动加入最内层分组，并显示四角归组反馈；锁定分组不允许新建。第二次松开鼠标才执行创建，框选拖动、平移和界面操作不会误触发。创建可撤销、重做并保存到 `.prg`；随后双击节点原位编辑。
+空白画布左键双击新建文字节点，选中新节点，不绘制额外圆角闪光。在分组内部新建时自动加入最内层分组；锁定分组不允许新建。第二次松开鼠标才执行创建，框选拖动、平移和界面操作不会误触发。创建可撤销、重做并保存到 `.mio`；随后双击节点原位编辑。
 
 当前 Bevy 画布支持文字节点创建与编辑、PNG/JPEG/SVG 图片导入、嵌套分组与整组移动、新建连线、切割删除、文档撤销与保存，以及默认开启且可关闭的物理推挤。折叠已有文档模型、显示投影及部分交互回归；`src/viewer.rs` 目前仅在 `--preview-tool collapsed` 时启用折叠投影，正式入口与完整集成待完成，不能仅凭底层测试认定折叠功能已交付。完整能力边界见 [PRD 的 C03 与 B04](PRD.md)。当前仍未覆盖原版所有节点类型的创建及全部特效，也未接入 Agent 运行。节点边框和排版未追求原版逐像素还原。世界文字使用固定逻辑字号的 MSDF 图集，放大由 shader 重建轮廓。已读取全部附件，不代表它们都在场景中显示。原版教程不包含画布图片节点，图片压力测试另用合成图。
 
@@ -142,7 +142,7 @@ cargo test --locked gpu_renders_chinese_at_multiple_scales -- --ignored --test-t
 
 ## 依赖选择
 
-Rust 标准库处理文件、CLI、集合、计时和结果写入；社区库处理通用格式/绘制，代码仅做 PRG 与场景集成。
+Rust 标准库处理文件、CLI、集合、计时和结果写入；社区库处理通用格式/绘制，项目代码负责 MIO 与场景集成。
 
 | 库 | 固定版本 | 许可证 | 要求/用途 |
 |---|---|---|---|
@@ -172,10 +172,10 @@ cargo fmt --check
 
 `document::Document` 已支持稳定 ID 的编辑/移动事务、取消、撤销/重做与保存点，历史栈复用 `undo =0.52.0`（MIT OR Apache-2.0）。原版文件通过 `rmpv =1.3.1`（MIT，Rust 1.85）保留 MessagePack 类型并仅修改对应节点字段；其他 ZIP 条目原样复制。`tempfile =3.27.0`（MIT OR Apache-2.0，Rust 1.63）负责同目录临时文件与原子替换，替换前重新读取结果校验。遇到共享碰撞形状等尚不支持的写入结构会拒绝保存，不修改原文件。
 
-可使用 `./run.sh --save-copy /absolute/path/copy.prg` 验证未修改文件的另存为。原版教程的编辑、全图移动、撤销、保存往返、非舞台条目逐字节保留与外部修改冲突检测由 `cargo test --no-default-features -- --include-ignored` 验证。坐标校验容差 0.01 世界单位，与原版序列化精度一致。保存保留节点的自动/手动尺寸模式；原版仍会按自己的字体引擎重新测量，不能承诺两版视觉尺寸逐像素一致。
+可使用 `./run.sh /absolute/path/source.mio --save-copy /absolute/path/copy.mio` 验证未修改文件的另存为。MIO 的编辑、撤销、保存往返、未知扩展保留与外部修改冲突检测由文档及 SQLite 测试覆盖。坐标校验容差为 0.01 世界单位，保存保留节点的自动/手动尺寸模式。
 
 中文字体由运行时外部加载，不随代码仓库分发；本机 Noto Sans CJK 的许可为 SIL OFL 1.1（`/usr/share/licenses/google-noto-sans-cjk-fonts/LICENSE`）。egui 保留内置字体回退。Bevy 与 egui 使用不同排版引擎；同一字体并不保证完全相同的换行。真实输入法候选窗、组合输入及跨平台行为须人工验收，自动输入测试不能替代。
 
 ## 原生项目与存储边界
 
-默认项目后缀为 `.mio`，当前为 SQLite schema 3，结构与版本以 [STORAGE.md](STORAGE.md) 为准。`src/project_sqlite.rs` 和同名 `.sql` 负责记录、关系与事务，`src/project.rs` / `src/project_package.rs` 保留版本清单与旧 ZIP 兼容，`src/project_history.rs` 负责显式选择的只读协作归档，`Document` 负责保存与往返校验。已有数据库事务更新变化行；首次保存、迁移与恢复代使用临时文件发布。`.prg` 仍按原格式读写，另存为 `.mio` 完成转换；无法保留协作历史或原生扩展时拒绝降级。本机 Runtime JSON 尚未迁移，不从项目归档恢复执行，画布撤销栈不作为持久化运行历史。
+项目仅支持 `.mio`，当前为 SQLite schema 3，结构与版本以 [STORAGE.md](STORAGE.md) 为准。`src/project_sqlite.rs` 和同名 `.sql` 负责记录、关系与事务，`src/project.rs` / `src/project_package.rs` 保留版本清单与旧 ZIP MIO 兼容，`src/project_history.rs` 负责显式选择的只读协作归档，`Document` 负责保存与往返校验。已有数据库事务更新变化行；首次保存、迁移与恢复代使用临时文件发布。`.prg` 不再读写或恢复。本机 Runtime JSON 尚未迁移，不从项目归档恢复执行，画布撤销栈不作为持久化运行历史。

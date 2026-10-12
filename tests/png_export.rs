@@ -46,7 +46,7 @@ fn check_nested_corner(light: bool, flip: [bool; 2], ui_scale: &str) {
         u8::from(flip[0]),
         u8::from(flip[1])
     );
-    let input = directory.path().join("nested-clip.prg");
+    let input = directory.path().join("nested-clip.mio");
     let output = directory.path().join("nested-clip.png");
     doc.save(&input).unwrap();
     let binary = std::env::var_os("GRAPLU_RENDER_BINARY")
@@ -74,7 +74,7 @@ fn check_nested_corner(light: bool, flip: [bool; 2], ui_scale: &str) {
     if let Some(path) = std::env::var_os("GRAPLU_CLIP_ARTIFACTS") {
         let path = std::path::PathBuf::from(path);
         std::fs::create_dir_all(&path).unwrap();
-        std::fs::copy(&input, path.join(format!("{name}.prg"))).unwrap();
+        std::fs::copy(&input, path.join(format!("{name}.mio"))).unwrap();
         std::fs::copy(&output, path.join(format!("{name}.png"))).unwrap();
     }
     let image = image::open(output).unwrap().into_rgba8();
@@ -146,7 +146,7 @@ fn expanded_group_corners_stay_visible_in_near_and_distant_desktop_views() {
             doc.create_text_node([6000.0, 0.0]).unwrap();
         }
         let name = if distant { "far" } else { "near" };
-        let input = directory.path().join(format!("group-{name}.prg"));
+        let input = directory.path().join(format!("group-{name}.mio"));
         doc.save(&input).unwrap();
         if let Some(path) = &artifacts {
             std::fs::copy(&input, path.join(input.file_name().unwrap())).unwrap();
@@ -247,7 +247,7 @@ fn nested_group_fill_stays_above_parent_at_different_scales() {
     doc.nodes[inner].id = "a-inner".into();
     doc.nodes[outer].id = "z-outer".into();
     doc.nodes[outer].children = vec!["a-inner".into()];
-    let input = directory.path().join("nested.prg");
+    let input = directory.path().join("nested.mio");
     doc.save(&input).unwrap();
     for width in [256, 320, 512, 640] {
         let output = directory.path().join(format!("nested-{width}.png"));
@@ -293,7 +293,7 @@ fn offscreen_export_contains_arc_outside_node_bounds_without_clipped_pixels() {
         ..Default::default()
     });
     doc.counts.insert("ArcEdge".into(), 1);
-    let input = directory.path().join("arc.prg");
+    let input = directory.path().join("arc.mio");
     let output = directory.path().join("arc.png");
     doc.save(&input).unwrap();
     let result = std::process::Command::new(env!("CARGO_BIN_EXE_project-graph-bevy-canvas"))
