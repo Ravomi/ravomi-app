@@ -6,6 +6,10 @@
 
 ## 产品体验与设计边界
 
+### UI 技术边界（2026-10-12）
+
+用户确认保留 Bevy 画布，全部应用 UI 迁移至 React + shadcn/ui，并移除 egui / bevy_egui。画布及 Pi 终端网格由 Bevy 绘制，首页、菜单、面板、弹窗、设置、节点控件和文字编辑等界面由 React 承担；图标使用 Tabler Icons。Rust 为业务状态来源。此项是 MVP 必需交付，实施与焦点、坐标、跨平台验收见 [TODO](TODO.md) P0 和 [MVP](MVP.md)。历史 egui 实现说明只记录现状，不作为新增 UI 的技术选型。
+
 ### 通用界面图标（2026-10-12）
 
 用户指定 [Tabler Icons](https://github.com/tabler/tabler-icons) 为统一图标库。新增与替换的通用图标默认采用 Outline，24×24 网格、2px 基准描边，按控件尺寸统一缩放并使用语义颜色；实现规则见 [AI_UI_RULES](AI_UI_RULES.md)。此选择适用于原生画布和 React 界面，品牌猫及应用标记沿用确认资产。现有自定义图标尚待迁移，不将选型记录视为替换已完成。
